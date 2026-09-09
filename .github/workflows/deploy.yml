@@ -35,7 +35,11 @@ jobs:
 
       - run: npm run selftest
 
+      # enablement turns Pages on via the API on the first run, so there is no
+      # manual "Settings -> Pages -> Source" step to forget.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
