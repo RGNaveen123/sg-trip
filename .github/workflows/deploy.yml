@@ -5,11 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Pages needs these; nothing here can write to the repo contents.
+# Writing the built site to the gh-pages branch needs contents: write.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # A newer push supersedes an in-flight deploy rather than queueing behind it.
 concurrency:
@@ -35,22 +33,16 @@ jobs:
 
       - run: npm run selftest
 
-      # No `enablement: true` here. It only works when Pages has never been set
-      # up; once Pages exists in "deploy from a branch" mode this step fails and
-      # takes the whole deploy with it. Set Settings -> Pages -> Source to
-      # "GitHub Actions" once, by hand, and this just reads that config.
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
+      # Publishing to a branch rather than via actions/deploy-pages, because
+      # Pages serves only one deployment per repo: the preview build needs to
+      # live alongside this one, in /preview on the same branch.
+      # Requires Settings -> Pages -> Source = "Deploy from a branch",
+      # branch gh-pages, folder / (root).
+      - name: Publish to gh-pages root
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          # The preview build lives in /preview on this same branch — publishing
+          # the live site must not sweep it away.
+          keep_files: true

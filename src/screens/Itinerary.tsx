@@ -13,6 +13,7 @@ import {
   Navigation,
   Pencil,
   Sparkles,
+  Ticket as TicketIcon,
   Trash2,
   TriangleAlert,
   Wand2,
@@ -20,6 +21,7 @@ import {
 import { Btn, Chip, Empty, spring, Spinner } from '../components/ui'
 import { ProposalCard } from '../components/ProposalCard'
 import { ScheduleSheet } from '../components/ScheduleSheet'
+import { TicketViewer } from '../components/TicketViewer'
 import { useTrip } from '../lib/store'
 import { useAi, useAllItems, useNow, useTripContext, useWeather } from '../lib/hooks'
 import {
@@ -46,7 +48,7 @@ import {
   validateActions,
 } from '../lib/ai'
 import { weatherWord } from '../lib/free'
-import type { ItineraryItem, Proposal } from '../lib/types'
+import type { ItineraryItem, Proposal, Ticket } from '../lib/types'
 
 export function Itinerary({
   toast,
@@ -63,6 +65,7 @@ export function Itinerary({
   const undo = useTrip((s) => s.undo)
   const rawItems = useTrip((s) => s.items)
   const customPlaces = useTrip((s) => s.customPlaces)
+  const tickets = useTrip((s) => s.tickets)
   const all = useAllItems()
   const ctx = useTripContext()
   const { call, hasKey } = useAi()
@@ -76,9 +79,19 @@ export function Itinerary({
   const [showWarnings, setShowWarnings] = useState(false)
   const [planning, setPlanning] = useState(false)
   const [proposal, setProposal] = useState<Proposal | null>(null)
+  const [viewingTicket, setViewingTicket] = useState<Ticket | null>(null)
   const stripRef = useRef<HTMLDivElement>(null)
 
   const items = useMemo(() => itemsForDay(all, day), [all, day])
+  /** Tickets attached to a stop, so the concert block can hand you the QR. */
+  const ticketsByItem = useMemo(() => {
+    const m = new Map<string, Ticket[]>()
+    for (const t of tickets) {
+      if (!t.itemId) continue
+      m.set(t.itemId, [...(m.get(t.itemId) ?? []), t])
+    }
+    return m
+  }, [tickets])
   const legs = useMemo(() => legsForDay(items, stay), [items, stay])
   const warnings = useMemo(() => tripWarnings(all, setup, stay), [all, setup, stay])
   const dayWarnings = warnings.filter((w) => w.day === day)
@@ -277,6 +290,8 @@ export function Itinerary({
                   leg={legs[i]}
                   index={i}
                   firstLeg={i === legs.findIndex((l) => !l.hidden && l.estimate)}
+                  tickets={ticketsByItem.get(it.id) ?? []}
+                  onShowTicket={setViewingTicket}
                   last={i === items.length - 1}
                   isNow={isToday && nowMin >= toMinutes(it.start) && nowMin < toMinutes(endOf(it))}
                   onEdit={() => setEditing(it)}
@@ -346,6 +361,8 @@ export function Itinerary({
         </div>
       </div>
 
+      <TicketViewer ticket={viewingTicket} onClose={() => setViewingTicket(null)} />
+
       <ScheduleSheet
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
@@ -374,6 +391,8 @@ function StopRow({
   firstLeg,
   last,
   isNow,
+  tickets,
+  onShowTicket,
   onEdit,
   onDelete,
 }: {
@@ -382,6 +401,8 @@ function StopRow({
   index: number
   firstLeg: boolean
   last: boolean
+  tickets: Ticket[]
+  onShowTicket: (t: Ticket) => void
   isNow: boolean
   onEdit: () => void
   onDelete: () => void
@@ -416,21 +437,29 @@ function StopRow({
 
         {/* card */}
         <div className="min-w-0 flex-1 pb-4">
-          <motion.button
+          {/* The card is a div, not a button. It used to be a button, which put
+              Directions/Reschedule/Delete inside it as nested <button>s —
+              invalid HTML, bad for screen readers, and it swallowed their
+              clicks. Only the summary row toggles now. */}
+          <motion.div
             layout
-            onClick={() => setOpen((v) => !v)}
-            className={`card w-full overflow-hidden p-3.5 text-left ${
+            className={`card w-full overflow-hidden ${
               isNow ? 'border-gold/60 shadow-[0_0_0_1px_rgba(232,180,92,0.25)]' : ''
             }`}
-            whileTap={{ scale: 0.99 }}
             transition={spring.snap}
           >
-            <div className="flex items-start gap-2">
+            <motion.button
+              onClick={() => setOpen((v) => !v)}
+              whileTap={{ scale: 0.99 }}
+              transition={spring.snap}
+              aria-expanded={open}
+              className="flex w-full items-start gap-2 p-3.5 text-left"
+            >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   {item.locked && <Lock size={11} className="shrink-0 text-danger" />}
                   {item.arrivedAt && <CheckCircle2 size={11} className="shrink-0 text-ok" />}
-                  <h3 className="truncate text-[15px] font-semibold text-cream">{item.name}</h3>
+                  <h3 className="text-[15px] font-semibold leading-snug text-cream">{item.name}</h3>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   <Chip tone={isNow ? 'gold' : 'mute'}>
@@ -439,6 +468,12 @@ function StopRow({
                   <Chip>{formatDuration(item.durationMin)}</Chip>
                   {isNow && <Chip tone="gold">now</Chip>}
                   {item.locked && <Chip tone="danger">fixed</Chip>}
+                  {tickets.length > 0 && (
+                    <Chip tone="gold">
+                      <TicketIcon size={9} /> {tickets.reduce((n, t) => n + t.passes.length, 0)} pass
+                      {tickets.reduce((n, t) => n + t.passes.length, 0) === 1 ? '' : 'es'}
+                    </Chip>
+                  )}
                 </div>
               </div>
               <motion.span
@@ -448,7 +483,7 @@ function StopRow({
               >
                 <ChevronDown size={15} />
               </motion.span>
-            </div>
+            </motion.button>
 
             <AnimatePresence initial={false}>
               {open && (
@@ -459,17 +494,25 @@ function StopRow({
                   transition={spring.soft}
                   className="overflow-hidden"
                 >
-                  <div className="mt-3 border-t border-line pt-3">
+                  <div className="border-t border-line px-3.5 pb-3.5 pt-3">
                     {item.notes && (
                       <p className="text-[12.5px] leading-relaxed text-mute">{item.notes}</p>
                     )}
                     <div className="mt-2.5 flex flex-wrap gap-2">
+                      {tickets.map((t) => (
+                        <Btn
+                          key={t.id}
+                          variant="gold"
+                          onClick={() => onShowTicket(t)}
+                        >
+                          <TicketIcon size={13} /> Show {t.title}
+                        </Btn>
+                      ))}
                       {item.coords && (
                         <a
                           href={directionsUrl(leg?.from?.coords ?? null, item.coords, leg?.mode ?? 'transit')}
                           target="_blank"
                           rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           <Btn>
                             <Navigation size={13} /> Directions
@@ -500,7 +543,7 @@ function StopRow({
                 </motion.div>
               )}
             </AnimatePresence>
-          </motion.button>
+          </motion.div>
         </div>
       </div>
     </motion.div>
@@ -528,7 +571,7 @@ function LegRow({ leg, first }: { leg: Leg; first: boolean }) {
           <Icon size={12} className={`shrink-0 ${colour}`} />
           {/* Only the first leg needs to name where you are coming from — after
               that it is obviously the stop directly above. */}
-          <span className="min-w-0 flex-1 truncate text-[11.5px] text-mute">
+          <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-mute">
             <span className={colour}>{leg.minutes}m</span> {MODE_WORD[leg.mode]} ·{' '}
             {leg.estimate.km} km
             {first && (

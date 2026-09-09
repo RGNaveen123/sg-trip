@@ -261,7 +261,7 @@ export function LocationFinder({
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] text-cream">{h.name}</div>
                     {h.address && (
-                      <div className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-mute">
+                      <div className="mt-0.5 text-[11.5px] leading-snug text-mute">
                         {h.address}
                       </div>
                     )}

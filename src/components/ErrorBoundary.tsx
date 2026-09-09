@@ -2,6 +2,7 @@ import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, DownloadCloud, RotateCcw } from 'lucide-react'
 import { BUILD_ID } from '../lib/pwa'
+import { STORE_KEY } from '../lib/storageKey'
 
 interface Props {
   children: ReactNode
@@ -45,7 +46,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   private exportBackup = () => {
     try {
-      const blob = new Blob([localStorage.getItem('sg-trip-v1') ?? '{}'], {
+      const blob = new Blob([localStorage.getItem(STORE_KEY) ?? '{}'], {
         type: 'application/json',
       })
       const url = URL.createObjectURL(blob)

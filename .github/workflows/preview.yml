@@ -1,0 +1,47 @@
+name: Deploy preview
+
+# GitHub Pages serves exactly one deployment per repo, so a second
+# actions/deploy-pages job would overwrite the live site rather than sit beside
+# it. Publishing into a subfolder of the gh-pages branch gives two live URLs:
+#   live    -> /sg-trip/
+#   preview -> /sg-trip/preview/
+# Requires Pages source to be set to "Deploy from a branch -> gh-pages -> root".
+
+on:
+  push:
+    branches: [v2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-preview
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck and tests gate the deploy, same as main.
+      - run: npm run build
+      - run: npm run selftest
+
+      - name: Publish to gh-pages/preview
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          destination_dir: preview
+          # Never wipe the live site sitting at the root of the same branch.
+          keep_files: true
+          commit_message: "preview: ${{ github.event.head_commit.message }}"

@@ -73,6 +73,40 @@ export interface Expense {
   createdAt: number
 }
 
+export type TicketKind = 'flight' | 'attraction' | 'concert' | 'transport' | 'other'
+
+/**
+ * One scannable thing. The label is free text because for a concert it names a
+ * person, for a flight it names a leg, and for a coach it names a seat.
+ */
+export interface Pass {
+  id: string
+  /** Key into the IndexedDB asset store. */
+  assetId: string
+  label: string
+  mime: string
+  addedAt: number
+}
+
+/**
+ * A booking, which usually covers more than one person — so it is a folder of
+ * passes rather than a single image.
+ */
+export interface Ticket {
+  id: string
+  title: string
+  kind: TicketKind
+  /** "YYYY-MM-DD" — the day it is used, not the day it was bought. */
+  date: string
+  /** Booking reference / PNR. */
+  ref?: string
+  notes?: string
+  /** Optional link to the itinerary stop it belongs to. */
+  itemId?: string
+  passes: Pass[]
+  createdAt: number
+}
+
 export interface TripSetup {
   /** Local departure from Kochi. */
   outboundISO: string

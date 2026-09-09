@@ -14,6 +14,7 @@ import { Btn, Chip, Field, inputCls, Segmented, Sheet, Spinner } from '../compon
 import { MapView } from '../components/LazyMap'
 import { LocationFinder, type Resolved } from '../components/LocationFinder'
 import { useTrip } from '../lib/store'
+import { STORE_KEY, IS_PREVIEW } from '../lib/storageKey'
 import { DEFAULT_PACKING } from '../lib/store'
 import { areaFor } from '../data/places'
 import { applyUpdate, BUILD_ID, checkForUpdate, usePwa } from '../lib/pwa'
@@ -374,7 +375,7 @@ export function Settings({ toast }: { toast: (t: string) => void }) {
           <Btn
             full
             onClick={() => {
-              const blob = new Blob([localStorage.getItem('sg-trip-v1') ?? '{}'], {
+              const blob = new Blob([localStorage.getItem(STORE_KEY) ?? '{}'], {
                 type: 'application/json',
               })
               const url = URL.createObjectURL(blob)
@@ -396,7 +397,7 @@ export function Settings({ toast }: { toast: (t: string) => void }) {
                 variant="danger"
                 className="flex-1"
                 onClick={() => {
-                  localStorage.removeItem('sg-trip-v1')
+                  localStorage.removeItem(STORE_KEY)
                   location.reload()
                 }}
               >

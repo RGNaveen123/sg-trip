@@ -4,6 +4,7 @@ import { allItems } from './trip'
 import { aiCall, type AiCallOptions, type AiReply } from './ai'
 import { fetchForecast, fetchRate, wikiSummary, type DayWeather } from './free'
 import type { Place } from './types'
+import { getAsset } from './tickets'
 
 /** The itinerary as it actually is: fixed blocks merged with user stops. */
 export function useAllItems() {
@@ -138,6 +139,44 @@ export function useWeather() {
   }, [])
 
   return days
+}
+
+/**
+ * Turns a stored ticket image into a displayable URL, and revokes it on the way
+ * out. Object URLs leak the whole Blob until revoked, and a ticket screenshot is
+ * megabytes — worth being careful about on a phone.
+ */
+export function useAssetUrl(assetId: string | null | undefined) {
+  const [url, setUrl] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!assetId) {
+      setUrl(null)
+      return
+    }
+    let revoked = false
+    let made: string | null = null
+    setError(null)
+    getAsset(assetId)
+      .then((blob) => {
+        if (revoked) return
+        if (!blob) {
+          setError('That image is missing from this device.')
+          return
+        }
+        made = URL.createObjectURL(blob)
+        setUrl(made)
+      })
+      .catch((e) => !revoked && setError(e instanceof Error ? e.message : 'Could not load it.'))
+    return () => {
+      revoked = true
+      if (made) URL.revokeObjectURL(made)
+      setUrl(null)
+    }
+  }, [assetId])
+
+  return { url, error }
 }
 
 export function useOnline() {

@@ -243,10 +243,10 @@ function PlaceRow({
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="truncate text-[13.5px] text-cream">{place.name}</span>
+          <span className="text-[13.5px] leading-snug text-cream">{place.name}</span>
           {place.custom && <ShoppingBag size={10} className="shrink-0 text-walk" />}
         </div>
-        <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-mute">{place.blurb}</p>
+        <p className="mt-0.5 text-[11.5px] leading-snug text-mute">{place.blurb}</p>
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <span className="font-mono text-[10px] text-mute-2">{formatDuration(place.typicalMin)}</span>

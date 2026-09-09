@@ -9,9 +9,13 @@ import type {
   Place,
   Proposal,
   Stay,
+  Ticket,
+  TicketKind,
+  Pass,
   TripSetup,
 } from './types'
 import { DEFAULT_ANCHORS, DEFAULT_SETUP, type Anchors } from './trip'
+import { STORE_KEY } from './storageKey'
 
 export interface PlaceInfo {
   extract: string
@@ -40,6 +44,7 @@ interface State {
   chat: ChatMessage[]
   packing: PackingItem[]
   custody: CustodyItem[]
+  tickets: Ticket[]
 
   apiKey: string
   aiCalls: number
@@ -86,6 +91,13 @@ interface State {
   addPacking: (text: string, reason?: string) => void
   removePacking: (id: string) => void
   seedPacking: (items: Omit<PackingItem, 'id' | 'packed'>[]) => void
+
+  addTicket: (t: Omit<Ticket, 'id' | 'createdAt' | 'passes'> & { passes?: Pass[] }) => string
+  updateTicket: (id: string, p: Partial<Omit<Ticket, 'id' | 'passes'>>) => void
+  removeTicket: (id: string) => void
+  addPasses: (ticketId: string, passes: Omit<Pass, 'id' | 'addedAt'>[]) => void
+  updatePass: (ticketId: string, passId: string, p: Partial<Pick<Pass, 'label'>>) => void
+  removePass: (ticketId: string, passId: string) => void
 
   setCustody: (what: string, who: string, note?: string) => void
   removeCustody: (id: string) => void
@@ -138,6 +150,7 @@ export const useTrip = create<State>()(
       chat: [],
       packing: [],
       custody: [],
+      tickets: [],
 
       apiKey: '',
       aiCalls: 0,
@@ -241,6 +254,47 @@ export const useTrip = create<State>()(
           return { packing: [...s.packing, ...add] }
         }),
 
+      addTicket: (t) => {
+        const id = uid()
+        set((s) => ({
+          tickets: [...s.tickets, { ...t, id, passes: t.passes ?? [], createdAt: Date.now() }],
+        }))
+        return id
+      },
+      updateTicket: (id, p) =>
+        set((s) => ({
+          tickets: s.tickets.map((t) => (t.id === id ? { ...t, ...p, id: t.id } : t)),
+        })),
+      removeTicket: (id) => set((s) => ({ tickets: s.tickets.filter((t) => t.id !== id) })),
+      addPasses: (ticketId, passes) =>
+        set((s) => ({
+          tickets: s.tickets.map((t) =>
+            t.id === ticketId
+              ? {
+                  ...t,
+                  passes: [
+                    ...t.passes,
+                    ...passes.map((x) => ({ ...x, id: uid(), addedAt: Date.now() })),
+                  ],
+                }
+              : t,
+          ),
+        })),
+      updatePass: (ticketId, passId, p) =>
+        set((s) => ({
+          tickets: s.tickets.map((t) =>
+            t.id === ticketId
+              ? { ...t, passes: t.passes.map((x) => (x.id === passId ? { ...x, ...p } : x)) }
+              : t,
+          ),
+        })),
+      removePass: (ticketId, passId) =>
+        set((s) => ({
+          tickets: s.tickets.map((t) =>
+            t.id === ticketId ? { ...t, passes: t.passes.filter((x) => x.id !== passId) } : t,
+          ),
+        })),
+
       setCustody: (what, who, note) =>
         set((s) => {
           const existing = s.custody.find((x) => x.what.toLowerCase() === what.toLowerCase())
@@ -275,7 +329,7 @@ export const useTrip = create<State>()(
       setFx: (fx) => set({ fx }),
     }),
     {
-      name: 'sg-trip-v1',
+      name: STORE_KEY,
       version: 1,
       // Explicit allow-list: everything the trip is, nothing transient.
       partialize: (s) => ({
@@ -289,6 +343,7 @@ export const useTrip = create<State>()(
         chat: s.chat.slice(-40),
         packing: s.packing,
         custody: s.custody,
+        tickets: s.tickets,
         apiKey: s.apiKey,
         aiCalls: s.aiCalls,
         aiBudget: s.aiBudget,

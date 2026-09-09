@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 
@@ -121,7 +121,8 @@ export function Btn({
   full,
 }: {
   children: ReactNode
-  onClick?: () => void
+  /** Receives the event so a button inside a tappable card can stop it bubbling. */
+  onClick?: (e: MouseEvent<HTMLButtonElement>) => void
   variant?: BtnVariant
   disabled?: boolean
   className?: string

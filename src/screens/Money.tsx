@@ -114,7 +114,7 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
                     className="h-2 w-2 shrink-0 rounded-full"
                     style={{ background: c.color, opacity: filter && !on ? 0.35 : 1 }}
                   />
-                  <span className={`flex-1 truncate text-[12.5px] ${on ? 'text-cream' : 'text-mute'}`}>
+                  <span className={`flex-1 text-[12.5px] leading-snug ${on ? 'text-cream' : 'text-mute'}`}>
                     {c.label}
                   </span>
                   <span className="font-mono text-[11px] text-cream">S${c.amount.toFixed(0)}</span>
@@ -171,7 +171,7 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
                     style={{ background: catOf(e.category).color }}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13.5px] text-cream">
+                    <div className="text-[13.5px] leading-snug text-cream">
                       {e.label || catOf(e.category).label}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
@@ -256,7 +256,7 @@ function SettleUp({
         className="flex w-full items-center gap-2.5 px-4 py-3"
       >
         <HandCoins size={15} className={square ? 'shrink-0 text-ok' : 'shrink-0 text-gold'} />
-        <span className="min-w-0 flex-1 truncate text-left text-[13.5px] text-cream">Settle up</span>
+        <span className="min-w-0 flex-1 text-left text-[13.5px] text-cream">Settle up</span>
         <Chip tone={square ? 'ok' : 'gold'}>
           {square ? 'all square' : `${transfers.length} payment${transfers.length === 1 ? '' : 's'}`}
         </Chip>
@@ -282,7 +282,7 @@ function SettleUp({
                   const owed = net < 0
                   return (
                     <div key={p} className="flex items-center gap-2.5">
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-cream">{p}</span>
+                      <span className="min-w-0 flex-1 text-[13px] leading-snug text-cream">{p}</span>
                       <span className="font-mono text-[10px] text-mute-2">
                         paid {formatSgd(ledger.paid[p] ?? 0)} · used {formatSgd(ledger.owed[p] ?? 0)}
                       </span>
@@ -314,9 +314,9 @@ function SettleUp({
                       transition={{ ...spring.soft, delay: i * 0.05 }}
                       className="flex items-center gap-2 rounded-xl border border-line bg-ink-2/40 px-3 py-2.5"
                     >
-                      <span className="truncate text-[13px] text-cream">{t.from}</span>
+                      <span className="text-[13px] leading-snug text-cream">{t.from}</span>
                       <ArrowRight size={13} className="shrink-0 text-gold" />
-                      <span className="min-w-0 flex-1 truncate text-[13px] text-cream">{t.to}</span>
+                      <span className="min-w-0 flex-1 text-[13px] leading-snug text-cream">{t.to}</span>
                       <span className="shrink-0 disp text-[19px] text-gold">{formatSgd(t.cents)}</span>
                     </motion.div>
                   ))}
