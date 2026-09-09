@@ -35,6 +35,8 @@ interface State {
   items: ItineraryItem[]
   customPlaces: Place[]
   expenses: Expense[]
+  /** The trip party. The first name is always "you" on this device. */
+  people: string[]
   chat: ChatMessage[]
   packing: PackingItem[]
   custody: CustodyItem[]
@@ -64,6 +66,12 @@ interface State {
 
   addCustomPlace: (p: Place) => void
   removeCustomPlace: (id: string) => void
+
+  setPeople: (names: string[]) => void
+  addPerson: (name: string) => void
+  removePerson: (name: string) => void
+  /** Renames across the roster and every expense that referenced the old name. */
+  renamePerson: (from: string, to: string) => void
 
   addExpense: (e: Omit<Expense, 'id' | 'createdAt'>) => void
   updateExpense: (id: string, p: Partial<Expense>) => void
@@ -95,6 +103,9 @@ interface State {
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
+/** Three siblings. Placeholder names, meant to be edited in Settings. */
+export const DEFAULT_PEOPLE = ['Me', 'Sibling 1', 'Sibling 2']
+
 export const DEFAULT_PACKING: Omit<PackingItem, 'id' | 'packed'>[] = [
   { text: 'Passport + visa/SG Arrival Card done', reason: 'entry' },
   { text: 'Printed / offline copy of SQ boarding passes', reason: 'entry' },
@@ -123,6 +134,7 @@ export const useTrip = create<State>()(
       items: [],
       customPlaces: [],
       expenses: [],
+      people: DEFAULT_PEOPLE,
       chat: [],
       packing: [],
       custody: [],
@@ -160,6 +172,34 @@ export const useTrip = create<State>()(
       addCustomPlace: (p) => set((s) => ({ customPlaces: [...s.customPlaces, p] })),
       removeCustomPlace: (id) =>
         set((s) => ({ customPlaces: s.customPlaces.filter((x) => x.id !== id) })),
+
+      setPeople: (people) => set({ people: people.filter((p) => p.trim()).slice(0, 10) }),
+      addPerson: (name) =>
+        set((s) => {
+          const n = name.trim()
+          if (!n || s.people.some((p) => p.toLowerCase() === n.toLowerCase())) return {}
+          return { people: [...s.people, n] }
+        }),
+      removePerson: (name) =>
+        set((s) =>
+          s.people.length <= 1 ? {} : { people: s.people.filter((p) => p !== name) },
+        ),
+      renamePerson: (from, to) =>
+        set((s) => {
+          const n = to.trim()
+          if (!n || from === n) return {}
+          const swap = (x: string) => (x === from ? n : x)
+          return {
+            people: s.people.map(swap),
+            expenses: s.expenses.map((e) => ({
+              ...e,
+              paidBy: e.paidBy ? swap(e.paidBy) : e.paidBy,
+              splitWith: e.splitWith?.map(swap),
+              onBehalfOf: e.onBehalfOf?.map(swap),
+              shares: e.shares?.map((sh) => ({ ...sh, name: swap(sh.name) })),
+            })),
+          }
+        }),
 
       addExpense: (e) =>
         set((s) => ({
@@ -245,6 +285,7 @@ export const useTrip = create<State>()(
         items: s.items,
         customPlaces: s.customPlaces,
         expenses: s.expenses,
+        people: s.people,
         chat: s.chat.slice(-40),
         packing: s.packing,
         custody: s.custody,

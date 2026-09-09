@@ -60,7 +60,13 @@ export interface Expense {
   /** "YYYY-MM-DD" */
   date: string
   forWhom: ExpenseFor
-  /** Equal split across N people. */
+  /** Who actually laid out the cash. Defaults to the first person on the roster. */
+  paidBy?: string
+  /** Equal split: the people it is shared between. */
+  splitWith?: string[]
+  /** 'onbehalf': who the payment was actually for. */
+  onBehalfOf?: string[]
+  /** Legacy equal split recorded only as a head count. */
   splitCount?: number
   /** Custom split: individual shares. */
   shares?: { name: string; amount: number }[]

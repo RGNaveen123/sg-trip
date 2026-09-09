@@ -16,7 +16,8 @@ import {
   tripWarnings,
 } from '../src/lib/trip'
 import { parseCoordsFromUrl, isShortenedMapsLink, estimateTravel } from '../src/lib/geo'
-import type { ItineraryItem, Stay } from '../src/lib/types'
+import { beneficiaries, buildLedger, settle, splitCents, toCents } from '../src/lib/settle'
+import type { Expense, ItineraryItem, Stay } from '../src/lib/types'
 
 let pass = 0
 let fail = 0
@@ -210,6 +211,85 @@ ok(
   tripWarnings(allItems(userItems, setup, anchors, null), setup, null).find((w) => w.id === 'no-stay')
     ?.level === 'info',
 )
+
+console.log('\n— settling up —')
+const party = ['Me', 'Ann', 'Bo']
+const exp = (o: Partial<Expense>): Expense => ({
+  id: Math.random().toString(36).slice(2),
+  amount: 0,
+  category: 'food',
+  label: '',
+  date: '2026-12-17',
+  forWhom: 'personal',
+  createdAt: 0,
+  ...o,
+})
+
+ok('odd cents are handed out, never lost', splitCents(1000, 3).reduce((a, b) => a + b, 0) === 1000)
+ok('a three-way split of S$10 is 334/333/333', splitCents(1000, 3).join(',') === '334,333,333')
+ok('splitting by zero people is empty, not a crash', splitCents(1000, 0).length === 0)
+
+const equal = exp({ amount: 30, forWhom: 'split', paidBy: 'Me', splitWith: party })
+ok('an equal split charges everyone', beneficiaries(equal, party).every((b) => b.cents === 1000))
+
+const behalf = exp({ amount: 20, forWhom: 'onbehalf', paidBy: 'Me', onBehalfOf: ['Ann', 'Bo'] })
+const bShares = beneficiaries(behalf, party)
+ok('paying for others charges the payer nothing', !bShares.some((b) => b.name === 'Me'))
+ok('and splits across the others', bShares.length === 2 && bShares[0].cents === 1000)
+
+const loose = exp({
+  amount: 100,
+  forWhom: 'split',
+  paidBy: 'Ann',
+  shares: [
+    { name: 'Me', amount: 30 },
+    { name: 'Ann', amount: 30 },
+    { name: 'Bo', amount: 30 },
+  ],
+})
+ok(
+  'a custom split that does not add up is forced back to the bill',
+  beneficiaries(loose, party).reduce((a, b) => a + b.cents, 0) === toCents(100),
+)
+
+const legacy = exp({ amount: 30, forWhom: 'split', splitCount: 3 })
+ok('a legacy head-count split still resolves', beneficiaries(legacy, party).length === 3)
+ok('a legacy entry is flagged as assumed', buildLedger([legacy], party).assumed === 1)
+
+const ledger = buildLedger(
+  [
+    exp({ amount: 30, forWhom: 'split', paidBy: 'Me', splitWith: party }),
+    exp({ amount: 60, forWhom: 'split', paidBy: 'Ann', splitWith: party }),
+    exp({ amount: 15, forWhom: 'personal', paidBy: 'Bo' }),
+  ],
+  party,
+)
+ok('paid totals are right', ledger.paid['Me'] === 3000 && ledger.paid['Ann'] === 6000)
+ok('owed totals are right', ledger.owed['Me'] === 3000 && ledger.owed['Bo'] === 4500)
+ok('the ledger always nets to zero', Object.values(ledger.net).reduce((a, b) => a + b, 0) === 0)
+
+const transfers = settle(ledger.net)
+ok('someone has to pay Ann', transfers.some((t) => t.to === 'Ann'))
+ok(
+  'transfers clear every balance exactly',
+  party.every((p) => {
+    const out = transfers.filter((t) => t.from === p).reduce((a, t) => a + t.cents, 0)
+    const inc = transfers.filter((t) => t.to === p).reduce((a, t) => a + t.cents, 0)
+    return ledger.net[p] + out - inc === 0
+  }),
+)
+ok('never more transfers than people minus one', transfers.length <= party.length - 1)
+ok('an all-square trip needs no payments', settle({ Me: 0, Ann: 0, Bo: 0 }).length === 0)
+ok('nobody pays themselves', transfers.every((t) => t.from !== t.to))
+ok('no expenses means an empty, balanced ledger', buildLedger([], party).totalCents === 0)
+
+const outsider = buildLedger(
+  [exp({ amount: 20, forWhom: 'split', paidBy: 'Me', shares: [{ name: 'Cal', amount: 20 }] })],
+  party,
+)
+ok('someone named only inside a split still lands in the ledger', outsider.people.includes('Cal'))
+ok('and that still nets to zero', Object.values(outsider.net).reduce((a, b) => a + b, 0) === 0)
+
 
 console.log(`\n${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

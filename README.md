@@ -22,7 +22,7 @@ npm run dev
 | `npm run dev` | Vite dev server |
 | `npm run build` | typecheck, then production build into `dist/` |
 | `npm run preview` | serve the built `dist/` locally |
-| `npm run selftest` | 55 assertions over the trip logic and the AI validation gate |
+| `npm run selftest` | 75 assertions over the trip logic, the settlement maths and the AI validation gate |
 | `npm run icons` | regenerate the PWA icons from `scripts/make-icons.mjs` |
 
 ## Putting it on a phone
@@ -65,6 +65,31 @@ blocks follow.
 
 The accommodation is a relative's guest house. It is never called a hotel,
 including in the prompt sent to the model.
+
+## Splitting the bill
+
+Every expense records **who paid** and **who it was for**, so the Spend tab can
+answer the question a group trip actually has: not "what did we spend" but "who
+hands what to whom at the end".
+
+- Roster of people lives in Settings. Renaming someone rewrites every expense
+  they appear in, so the ledger never breaks.
+- An expense is *just me*, an *equal split* between any subset of the party, a
+  *custom split* with per-person amounts, or *paid on behalf of* others (the
+  payer consumes none of it).
+- **Settle up** shows each person's paid / used / net, then the fewest payments
+  that clear every balance — at most one fewer than the number of people.
+
+All settlement arithmetic is in integer cents. Splitting S$10 three ways in
+floating point gives three shares that do not add back to S$10, and those
+fractions of a cent compound into a settlement that does not balance; the odd
+cents are handed to real people instead. `splitCents`, the ledger and the
+transfer solver are covered by the selftest, including the invariant that the
+ledger always nets to zero.
+
+Expenses logged before the roster existed still work — they are read as "you
+paid, split across the group" and the settle-up panel says how many entries it
+had to assume that about.
 
 ## Money and AI
 
@@ -133,6 +158,7 @@ src/
   components/        Sheet/Btn/Chip primitives, map, schedule & place sheets
   lib/
     trip.ts          dates, fixed blocks, travel legs, free slots, warnings
+    settle.ts        the who-owes-whom ledger, in integer cents
     ai.ts            the model call, the prompt, and the validation gate
     geo.ts           distance, travel estimates, maps links, URL parsing
     free.ts          every keyless public API
@@ -145,6 +171,11 @@ scripts/
 ```
 
 Two notes for whoever touches this next:
+
+- There are two error boundaries. The outer one in `main.tsx` catches anything;
+  the inner one in `App.tsx` is keyed by tab, so a crash on one screen leaves
+  the header, the nav and every other tab working — switching away and back
+  clears it. Both offer a backup export before you do anything drastic.
 
 - Bottom sheets render through a portal on purpose. An animated `transform`
   anywhere up the tree becomes the containing block for `position: fixed`

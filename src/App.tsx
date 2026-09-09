@@ -14,6 +14,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { Btn, Chip, Sheet, spring, Toasts, useToasts } from './components/ui'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Itinerary } from './screens/Itinerary'
 import { Places } from './screens/Places'
 
@@ -274,22 +275,26 @@ export default function App() {
           transition={{ duration: 0.18, ease: [0.32, 0.72, 0, 1] }}
           className={view === 'ask' ? 'flex min-h-full flex-col pt-3' : 'pt-3'}
         >
-          <Suspense fallback={<ScreenSkeleton />}>
-            {view === 'plan' && <Itinerary toast={toast} goSettings={() => setView('settings')} />}
-            {view === 'places' && <Places toast={toast} onAsk={goAsk} />}
-            {view === 'map' && <MapScreen position={live.position} />}
-            {view === 'money' && <Money toast={toast} goSettings={() => setView('settings')} />}
-            {view === 'ask' && (
-              <Ask
-                prefill={askPrefill}
-                onPrefillUsed={() => setAskPrefill(null)}
-                toast={toast}
-                goSettings={() => setView('settings')}
-              />
-            )}
-            {view === 'settings' && <Settings toast={toast} />}
-            {view === 'kit' && <Kit toast={toast} />}
-          </Suspense>
+          {/* Keyed by view, so a crash in one tab does not take the others
+              with it — switching tabs clears it and the app keeps working. */}
+          <ErrorBoundary resetKey={view} compact label={TITLES[view]}>
+            <Suspense fallback={<ScreenSkeleton />}>
+              {view === 'plan' && <Itinerary toast={toast} goSettings={() => setView('settings')} />}
+              {view === 'places' && <Places toast={toast} onAsk={goAsk} />}
+              {view === 'map' && <MapScreen position={live.position} />}
+              {view === 'money' && <Money toast={toast} goSettings={() => setView('settings')} />}
+              {view === 'ask' && (
+                <Ask
+                  prefill={askPrefill}
+                  onPrefillUsed={() => setAskPrefill(null)}
+                  toast={toast}
+                  goSettings={() => setView('settings')}
+                />
+              )}
+              {view === 'settings' && <Settings toast={toast} />}
+              {view === 'kit' && <Kit toast={toast} />}
+            </Suspense>
+          </ErrorBoundary>
         </motion.div>
       </main>
 

@@ -1,7 +1,11 @@
 import { useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  ArrowRight,
   Camera,
+  Check,
+  ChevronDown,
+  HandCoins,
   Pencil,
   Plus,
   RefreshCw,
@@ -15,6 +19,7 @@ import { useTrip } from '../lib/store'
 import { useAi, useFx } from '../lib/hooks'
 import { dateForDay, dayCount, formatDayLabel, ymd } from '../lib/trip'
 import { BudgetDeclined, parseReceiptReply, RECEIPT_SYSTEM, TIER_LABEL } from '../lib/ai'
+import { buildLedger, formatSgd, settle, toMoney } from '../lib/settle'
 import type { Expense, ExpenseCategory, ExpenseFor } from '../lib/types'
 
 const CATS: { value: ExpenseCategory; label: string; color: string }[] = [
@@ -29,9 +34,17 @@ const CAT = Object.fromEntries(CATS.map((c) => [c.value, c])) as Record<
   (typeof CATS)[number]
 >
 
+/**
+ * An expense restored from an older build — or from a hand-edited backup —
+ * can carry a category this build has never heard of. Fall back to Misc
+ * rather than letting an undefined lookup take the whole screen down.
+ */
+const catOf = (c: ExpenseCategory | string) => CAT[c as ExpenseCategory] ?? CAT.misc
+
 export function Money({ toast, goSettings }: { toast: (t: string) => void; goSettings: () => void }) {
   const expenses = useTrip((s) => s.expenses)
   const removeExpense = useTrip((s) => s.removeExpense)
+  const people = useTrip((s) => s.people)
   const setup = useTrip((s) => s.setup)
   const { fx, loading: fxLoading, refresh } = useFx()
 
@@ -47,7 +60,13 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
   }, [expenses])
 
   const shown = filter ? expenses.filter((e) => e.category === filter) : expenses
-  const myShare = expenses.reduce((s, e) => s + personalShare(e), 0)
+
+  // One pass over every expense gives both "what did this cost me" and the
+  // list of payments that squares the group up.
+  const ledger = useMemo(() => buildLedger(expenses, people), [expenses, people])
+  const transfers = useMemo(() => settle(ledger.net), [ledger])
+  const me = people[0] ?? 'Me'
+  const myShare = toMoney(ledger.owed[me] ?? 0)
 
   return (
     <div className="px-4 pb-6">
@@ -109,6 +128,10 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
         </div>
       )}
 
+      {expenses.length > 0 && (
+        <SettleUp ledger={ledger} transfers={transfers} goSettings={goSettings} />
+      )}
+
       <Btn full variant="gold" className="mt-3" onClick={() => setAdding(true)}>
         <Plus size={15} /> Log an expense
       </Btn>
@@ -120,7 +143,7 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
             onClick={() => setFilter(null)}
             className="mb-2 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-gold"
           >
-            <X size={11} /> clear {CAT[filter].label} filter
+            <X size={11} /> clear {catOf(filter).label} filter
           </button>
         )}
 
@@ -145,11 +168,11 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
                 >
                   <span
                     className="h-8 w-1 shrink-0 rounded-full"
-                    style={{ background: CAT[e.category].color }}
+                    style={{ background: catOf(e.category).color }}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[13.5px] text-cream">
-                      {e.label || CAT[e.category].label}
+                      {e.label || catOf(e.category).label}
                     </div>
                     <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                       <span className="font-mono text-[10px] text-mute-2">{e.date}</span>
@@ -162,6 +185,7 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
                         </Chip>
                       )}
                       {e.forWhom === 'onbehalf' && <Chip tone="alert">paid for others</Chip>}
+                      {e.paidBy && <Chip tone="mute">{e.paidBy} paid</Chip>}
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
@@ -206,15 +230,153 @@ export function Money({ toast, goSettings }: { toast: (t: string) => void; goSet
   )
 }
 
-/** What this entry actually costs the person logging it. */
-function personalShare(e: Expense): number {
-  if (e.forWhom === 'personal') return e.amount
-  if (e.forWhom === 'onbehalf') return 0
-  if (e.shares?.length) {
-    // First share is treated as yours when a custom split is used.
-    return e.shares[0]?.amount ?? 0
-  }
-  return e.amount / Math.max(1, e.splitCount ?? 3)
+// ---------------------------------------------------------------- settle up
+
+/**
+ * The question a group trip actually needs answered: not "what did we spend"
+ * but "who hands what to whom at the end". Everything here is derived — there
+ * is no separate settlement state to keep in sync.
+ */
+function SettleUp({
+  ledger,
+  transfers,
+  goSettings,
+}: {
+  ledger: ReturnType<typeof buildLedger>
+  transfers: ReturnType<typeof settle>
+  goSettings: () => void
+}) {
+  const [open, setOpen] = useState(true)
+  const square = transfers.length === 0
+
+  return (
+    <div className="card mt-3 overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2.5 px-4 py-3"
+      >
+        <HandCoins size={15} className={square ? 'shrink-0 text-ok' : 'shrink-0 text-gold'} />
+        <span className="min-w-0 flex-1 truncate text-left text-[13.5px] text-cream">Settle up</span>
+        <Chip tone={square ? 'ok' : 'gold'}>
+          {square ? 'all square' : `${transfers.length} payment${transfers.length === 1 ? '' : 's'}`}
+        </Chip>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={spring.snap} className="text-mute-2">
+          <ChevronDown size={15} />
+        </motion.span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={spring.soft}
+            className="overflow-hidden"
+          >
+            <div className="space-y-3 border-t border-line px-4 py-3">
+              {/* per-person balance */}
+              <div className="space-y-1.5">
+                {ledger.people.map((p) => {
+                  const net = ledger.net[p] ?? 0
+                  const owed = net < 0
+                  return (
+                    <div key={p} className="flex items-center gap-2.5">
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-cream">{p}</span>
+                      <span className="font-mono text-[10px] text-mute-2">
+                        paid {formatSgd(ledger.paid[p] ?? 0)} · used {formatSgd(ledger.owed[p] ?? 0)}
+                      </span>
+                      <span
+                        className={`w-20 shrink-0 text-right font-mono text-[12px] ${
+                          net === 0 ? 'text-mute-2' : owed ? 'text-danger' : 'text-ok'
+                        }`}
+                      >
+                        {net === 0 ? '—' : `${owed ? '−' : '+'}${formatSgd(net)}`}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* the actual payments */}
+              {square ? (
+                <p className="rounded-xl border border-ok/30 bg-ok/8 px-3 py-2.5 text-[12.5px] leading-snug text-ok">
+                  Nobody owes anybody. Everything logged so far balances out.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="lbl">to square up</div>
+                  {transfers.map((t, i) => (
+                    <motion.div
+                      key={`${t.from}-${t.to}-${i}`}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ ...spring.soft, delay: i * 0.05 }}
+                      className="flex items-center gap-2 rounded-xl border border-line bg-ink-2/40 px-3 py-2.5"
+                    >
+                      <span className="truncate text-[13px] text-cream">{t.from}</span>
+                      <ArrowRight size={13} className="shrink-0 text-gold" />
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-cream">{t.to}</span>
+                      <span className="shrink-0 disp text-[19px] text-gold">{formatSgd(t.cents)}</span>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+
+              {ledger.assumed > 0 && (
+                <p className="text-[11.5px] leading-snug text-alert">
+                  {ledger.assumed} entr{ledger.assumed === 1 ? 'y was' : 'ies were'} logged before
+                  names were tracked, so this assumes {ledger.people[0]} paid and the split covered
+                  the whole group. Edit them to be exact.
+                </p>
+              )}
+
+              <button
+                onClick={goSettings}
+                className="font-mono text-[10px] uppercase tracking-[0.12em] text-mute-2"
+              >
+                rename people in settings →
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+/** Toggle chips over the trip roster. */
+function PersonPicker({
+  people,
+  selected,
+  onChange,
+  exclude,
+}: {
+  people: string[]
+  selected: string[]
+  onChange: (next: string[]) => void
+  exclude?: string
+}) {
+  const list = people.filter((p) => p !== exclude)
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {list.map((p) => {
+        const on = selected.includes(p)
+        return (
+          <button
+            key={p}
+            onClick={() => onChange(on ? selected.filter((x) => x !== p) : [...selected, p])}
+            className={`rounded-lg border px-2.5 py-1.5 text-[12px] transition-colors ${
+              on ? 'border-gold bg-gold/12 text-gold' : 'border-line text-mute'
+            }`}
+          >
+            {on && <Check size={10} className="mr-1 inline" />}
+            {p}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------- donut
@@ -294,6 +456,7 @@ function ExpenseSheet({
 }) {
   const addExpense = useTrip((s) => s.addExpense)
   const updateExpense = useTrip((s) => s.updateExpense)
+  const people = useTrip((s) => s.people)
   const { call, hasKey } = useAi()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -303,7 +466,9 @@ function ExpenseSheet({
   const [date, setDate] = useState(dateForDayFn(1))
   const [forWhom, setForWhom] = useState<ExpenseFor>('personal')
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal')
-  const [splitCount, setSplitCount] = useState(3)
+  const [paidBy, setPaidBy] = useState(people[0] ?? 'Me')
+  const [splitWith, setSplitWith] = useState<string[]>(people)
+  const [onBehalfOf, setOnBehalfOf] = useState<string[]>(people.slice(1))
   const [shares, setShares] = useState<{ name: string; amount: string }[]>([
     { name: 'Me', amount: '' },
     { name: '', amount: '' },
@@ -321,7 +486,9 @@ function ExpenseSheet({
     setDate(editing.date)
     setForWhom(editing.forWhom)
     setSplitMode(editing.shares?.length ? 'custom' : 'equal')
-    setSplitCount(editing.splitCount ?? 3)
+    setPaidBy(editing.paidBy ?? people[0] ?? 'Me')
+    setSplitWith(editing.splitWith ?? people.slice(0, editing.splitCount ?? people.length))
+    setOnBehalfOf(editing.onBehalfOf ?? people.filter((x) => x !== (editing.paidBy ?? people[0])))
     if (editing.shares?.length) {
       setShares(editing.shares.map((s) => ({ name: s.name, amount: String(s.amount) })))
     }
@@ -383,7 +550,12 @@ function ExpenseSheet({
       label: label.trim(),
       date,
       forWhom,
-      splitCount: forWhom === 'split' && splitMode === 'equal' ? splitCount : undefined,
+      paidBy,
+      splitWith: forWhom === 'split' && splitMode === 'equal' ? splitWith : undefined,
+      onBehalfOf: forWhom === 'onbehalf' ? onBehalfOf : undefined,
+      // Kept in step so anything still reading the old field stays correct.
+      splitCount:
+        forWhom === 'split' && splitMode === 'equal' ? splitWith.length : undefined,
       shares:
         forWhom === 'split' && splitMode === 'custom'
           ? shares
@@ -407,6 +579,9 @@ function ExpenseSheet({
     setLabel('')
     setForWhom('personal')
     setSplitMode('equal')
+    setPaidBy(people[0] ?? 'Me')
+    setSplitWith(people)
+    setOnBehalfOf(people.slice(1))
     setReadNote('')
     setShares([
       { name: 'Me', amount: '' },
@@ -490,6 +665,22 @@ function ExpenseSheet({
           </div>
         </Field>
 
+        <Field label="Paid by" hint="Whoever actually handed over the money or tapped the card.">
+          <div className="flex flex-wrap gap-1.5">
+            {people.map((p) => (
+              <button
+                key={p}
+                onClick={() => setPaidBy(p)}
+                className={`rounded-lg border px-2.5 py-1.5 text-[12px] transition-colors ${
+                  paidBy === p ? 'border-gold bg-gold/12 text-gold' : 'border-line text-mute'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </Field>
+
         <Field label="Who is it for">
           <Segmented
             id="forwhom"
@@ -525,28 +716,12 @@ function ExpenseSheet({
 
                 {splitMode === 'equal' ? (
                   <div>
-                    <div className="flex items-center gap-3">
-                      <span className="lbl">People</span>
-                      <div className="flex items-center gap-2">
-                        {[2, 3, 4, 5, 6].map((n) => (
-                          <button
-                            key={n}
-                            onClick={() => setSplitCount(n)}
-                            className={`h-8 w-8 rounded-lg border font-mono text-[12px] ${
-                              splitCount === n
-                                ? 'border-gold bg-gold/12 text-gold'
-                                : 'border-line text-mute'
-                            }`}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    <div className="lbl mb-2">Shared between</div>
+                    <PersonPicker people={people} selected={splitWith} onChange={setSplitWith} />
                     <div className="mt-2.5 rounded-lg border border-line bg-ink-2/40 px-3 py-2 text-center">
-                      <div className="lbl">each pays</div>
+                      <div className="lbl">each of {splitWith.length || '—'} pays</div>
                       <div className="disp text-[24px] text-gold">
-                        S${(amountNum / Math.max(1, splitCount)).toFixed(2)}
+                        S${(amountNum / Math.max(1, splitWith.length)).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -614,6 +789,36 @@ function ExpenseSheet({
           )}
         </AnimatePresence>
 
+        <AnimatePresence initial={false}>
+          {forWhom === 'onbehalf' && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={spring.soft}
+              className="overflow-hidden"
+            >
+              <div className="card space-y-2 p-3.5">
+                <div className="lbl">Paid for</div>
+                <PersonPicker
+                  people={people}
+                  selected={onBehalfOf}
+                  onChange={setOnBehalfOf}
+                  exclude={paidBy}
+                />
+                <p className="text-[11.5px] leading-snug text-mute">
+                  {paidBy} covers this and owes nothing towards it —{' '}
+                  {onBehalfOf.length
+                    ? `split ${onBehalfOf.length} way${onBehalfOf.length === 1 ? '' : 's'} at S$${(
+                        amountNum / Math.max(1, onBehalfOf.length)
+                      ).toFixed(2)} each.`
+                    : 'pick who it was for.'}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* ---- receipt vision ---- */}
         <div className="card p-3.5">
           <div className="flex items-center gap-2">
@@ -651,7 +856,16 @@ function ExpenseSheet({
           {readNote && <p className="mt-2 text-[11.5px] leading-snug text-mute">{readNote}</p>}
         </div>
 
-        <Btn variant="gold" full onClick={save} disabled={!amountNum}>
+        <Btn
+          variant="gold"
+          full
+          onClick={save}
+          disabled={
+            !amountNum ||
+            (forWhom === 'split' && splitMode === 'equal' && splitWith.length === 0) ||
+            (forWhom === 'onbehalf' && onBehalfOf.length === 0)
+          }
+        >
           {editing ? 'Save changes' : `Log S$${amountNum.toFixed(2)}`}
         </Btn>
       </div>

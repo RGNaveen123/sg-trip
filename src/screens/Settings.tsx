@@ -6,6 +6,7 @@ import {
   EyeOff,
   Home,
   KeyRound,
+  Plus,
   RefreshCw,
   Search,
   Trash2,
@@ -219,6 +220,9 @@ export function Settings({ toast }: { toast: (t: string) => void }) {
       {/* ---- stay ---- */}
       <StaySection onOpen={() => setStayOpen(true)} />
 
+      {/* ---- the trip party ---- */}
+      <PeopleSection toast={toast} />
+
       {/* ---- pace + currency ---- */}
       <Section title="How you like to travel">
         <div className="space-y-3">
@@ -430,6 +434,79 @@ function Section({
       {hint && <p className="mt-1 mb-3 text-[11.5px] leading-snug text-mute">{hint}</p>}
       <div className={hint ? '' : 'mt-3'}>{children}</div>
     </div>
+  )
+}
+
+function PeopleSection({ toast }: { toast: (t: string) => void }) {
+  const people = useTrip((s) => s.people)
+  const addPerson = useTrip((s) => s.addPerson)
+  const removePerson = useTrip((s) => s.removePerson)
+  const renamePerson = useTrip((s) => s.renamePerson)
+  const [draft, setDraft] = useState('')
+
+  return (
+    <Section
+      title="Who's on the trip"
+      hint="Used to split expenses and work out who owes whom. The first name is you on this phone. Renaming someone updates every expense they appear in."
+    >
+      <div className="space-y-2">
+        {people.map((p, i) => (
+          <div key={p} className="flex items-center gap-2">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line font-mono text-[11px] text-mute-2">
+              {i === 0 ? '★' : i + 1}
+            </span>
+            <input
+              defaultValue={p}
+              onBlur={(e) => {
+                const v = e.target.value.trim()
+                if (v && v !== p) {
+                  renamePerson(p, v)
+                  toast(`Renamed to ${v} everywhere.`)
+                } else {
+                  e.target.value = p
+                }
+              }}
+              className={inputCls + ' flex-1'}
+            />
+            {people.length > 1 && i > 0 && (
+              <button
+                onClick={() => removePerson(p)}
+                aria-label={`Remove ${p}`}
+                className="shrink-0 px-1 text-mute-2"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+
+        <div className="flex gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && draft.trim()) {
+                addPerson(draft.trim())
+                setDraft('')
+              }
+            }}
+            placeholder="Add someone"
+            className={inputCls + ' flex-1'}
+          />
+          <Btn
+            onClick={() => {
+              if (draft.trim()) {
+                addPerson(draft.trim())
+                setDraft('')
+              }
+            }}
+            disabled={!draft.trim()}
+          >
+            <Plus size={14} />
+          </Btn>
+        </div>
+      </div>
+    </Section>
   )
 }
 
