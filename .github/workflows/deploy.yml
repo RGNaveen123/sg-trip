@@ -35,11 +35,11 @@ jobs:
 
       - run: npm run selftest
 
-      # enablement turns Pages on via the API on the first run, so there is no
-      # manual "Settings -> Pages -> Source" step to forget.
+      # No `enablement: true` here. It only works when Pages has never been set
+      # up; once Pages exists in "deploy from a branch" mode this step fails and
+      # takes the whole deploy with it. Set Settings -> Pages -> Source to
+      # "GitHub Actions" once, by hand, and this just reads that config.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
