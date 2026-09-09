@@ -1,6 +1,6 @@
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { useEffect, useMemo } from 'react'
 import type { LatLng } from '../lib/types'
 
@@ -51,6 +51,19 @@ function Fit({ points, active }: { points: MapPoint[]; active: boolean }) {
   return null
 }
 
+/**
+ * Tap anywhere to drop the pin. No geocoder, no link parsing, no network —
+ * the one way of setting a location that cannot fail.
+ */
+function ClickToPlace({ onPick }: { onPick: (c: LatLng) => void }) {
+  useMapEvents({
+    click(e) {
+      onPick({ lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6) })
+    },
+  })
+  return null
+}
+
 /** Leaflet measures itself on mount; inside a sheet that is too early. */
 function Resize() {
   const map = useMap()
@@ -73,6 +86,7 @@ export function MapView({
   interactive = true,
   fit = true,
   className = '',
+  onPick,
 }: {
   points: MapPoint[]
   connect?: boolean
@@ -80,6 +94,8 @@ export function MapView({
   interactive?: boolean
   fit?: boolean
   className?: string
+  /** When set, tapping the map reports the coordinates instead of doing nothing. */
+  onPick?: (c: LatLng) => void
 }) {
   const line = useMemo(
     () => points.map((p) => [p.coords.lat, p.coords.lng] as [number, number]),
@@ -140,6 +156,7 @@ export function MapView({
             </Popup>
           </Marker>
         ))}
+        {onPick && <ClickToPlace onPick={onPick} />}
         <Fit points={points} active={fit} />
         <Resize />
       </MapContainer>

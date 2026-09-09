@@ -133,19 +133,31 @@ Whatever survives is shown as a diff card with an **Apply** button. Whatever
 does not is shown too, struck through, with the reason. Applying is undoable
 from the toast. `npm run selftest` covers all of this.
 
-## Custom places, and why short links are awkward
+## Pinning a location
 
-A full `google.com/maps/@1.28,103.86` link has the coordinates in it. A
-`maps.app.goo.gl` link does not — only the server that issued it knows where it
-points, and a browser cannot read a cross-origin redirect. So resolution is
-layered, and the UI shows you which step succeeded:
+Three independent ways, offered in the order they actually work. The same
+component does custom places and the stay location.
 
-1. read coordinates straight out of the URL
-2. ask a public CORS proxy to follow the redirect and scrape them out
-3. pull a place name out of the URL and geocode that on OpenStreetMap
-4. geocode whatever name you typed
-5. only then, and only if you tap it, an AI web search — clearly marked as the
-   most expensive call in the app
+**Search** is the default and handles almost everything. It queries
+[OneMap](https://www.onemap.gov.sg) — the Singapore Land Authority's own
+gazetteer — before anything else, so building names, hawker centres, HDB blocks
+and **six-digit postal codes** all resolve exactly, with the full address shown.
+A postal code is the surest input there is: it identifies one building. If
+OneMap has nothing it falls back to Photon, then Nominatim.
+
+**Drop a pin** shows a map and takes a tap. No lookup, no network, nothing to
+fail — the option that always works. There is a "use where I am now" button too.
+
+**Link** is last on purpose. A full `google.com/maps/@1.28,103.86` URL has the
+coordinates in it, but a `maps.app.goo.gl` short link does not — only the server
+that issued it knows where it points, and a browser cannot read a cross-origin
+redirect. The app tries a public CORS proxy and then the place name embedded in
+the URL, showing you which step succeeded, but this path genuinely fails often.
+Pasting raw coordinates works reliably: long-press the spot in Google Maps and
+copy the numbers it shows.
+
+An AI web search is offered only after the free routes come up empty, only when
+you tap it, and is labelled as the most expensive call in the app.
 
 Every path ends at a map pin you confirm before saving.
 

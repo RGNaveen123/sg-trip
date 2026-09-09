@@ -113,8 +113,12 @@
   background: #0A1814 !important;
   font-family: var(--font-sans);
 }
-.leaflet-tile {
-  filter: invert(1) hue-rotate(190deg) saturate(0.28) brightness(0.62) contrast(1.05) sepia(0.1);
+/* Leaflet's own stylesheet sets `.leaflet-tile { filter: inherit }`, and since
+   the map moved into a lazily loaded chunk that sheet now loads after this one
+   and wins on equal specificity. Qualifying with the container outranks it
+   whatever the load order, and keeps the filter applied exactly once. */
+.leaflet-container .leaflet-tile {
+  filter: invert(1) hue-rotate(190deg) saturate(0.28) brightness(0.8) contrast(1.12) sepia(0.12);
 }
 .leaflet-control-attribution {
   background: rgba(6,17,14,0.75) !important;

@@ -8,21 +8,18 @@ import {
   KeyRound,
   Plus,
   RefreshCw,
-  Search,
   Trash2,
 } from 'lucide-react'
 import { Btn, Chip, Field, inputCls, Segmented, Sheet, Spinner } from '../components/ui'
 import { MapView } from '../components/LazyMap'
+import { LocationFinder, type Resolved } from '../components/LocationFinder'
 import { useTrip } from '../lib/store'
 import { DEFAULT_PACKING } from '../lib/store'
 import { areaFor } from '../data/places'
-import { geocode, nameFromMapsUrl, resolveShortLink } from '../lib/free'
-import { isShortenedMapsLink, looksLikeUrl, parseCoordsFromUrl } from '../lib/geo'
 import { applyUpdate, BUILD_ID, checkForUpdate, usePwa } from '../lib/pwa'
 import { MODEL, TIER_LABEL } from '../lib/ai'
 import { dateOf, timeOf } from '../lib/trip'
 import { requestNotificationPermission } from '../lib/tracking'
-import type { LatLng } from '../lib/types'
 
 export function Settings({ toast }: { toast: (t: string) => void }) {
   const setup = useTrip((s) => s.setup)
@@ -561,61 +558,19 @@ function StaySheet({
 }) {
   const setStay = useTrip((s) => s.setStay)
   const [name, setName] = useState('')
-  const [link, setLink] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [found, setFound] = useState<LatLng | null>(null)
-  const [note, setNote] = useState('')
-
-  const resolve = async () => {
-    setBusy(true)
-    setNote('')
-    setFound(null)
-    const raw = link.trim()
-    try {
-      let c = raw ? parseCoordsFromUrl(raw) : null
-      if (c) setNote('Coordinates read from the link.')
-
-      if (!c && raw && (isShortenedMapsLink(raw) || looksLikeUrl(raw))) {
-        c = await resolveShortLink(raw)
-        if (c) setNote('Short link resolved through a public proxy.')
-      }
-      if (!c && raw) {
-        const n = nameFromMapsUrl(raw)
-        if (n) {
-          const g = await geocode(n)
-          if (g[0]) {
-            c = g[0].coords
-            setNote(`Matched "${n}" on OpenStreetMap.`)
-          }
-        }
-      }
-      if (!c && name.trim()) {
-        const g = await geocode(`${name.trim()}, Singapore`)
-        if (g[0]) {
-          c = g[0].coords
-          setNote('Matched by name on OpenStreetMap.')
-        }
-      }
-      if (!c) setNote('Could not place that. You can still save it without a pin.')
-      setFound(c)
-    } finally {
-      setBusy(false)
-    }
-  }
+  const [found, setFound] = useState<Resolved | null>(null)
 
   const save = (withCoords: boolean) => {
-    const coords = withCoords ? found : null
+    const coords = withCoords ? found?.coords ?? null : null
     setStay({
-      name: name.trim() || 'The guest house',
+      name: name.trim() || found?.label || 'The guest house',
       coords,
       area: coords ? areaFor(coords) : null,
-      rawInput: link.trim() || name.trim(),
+      rawInput: found?.source ?? 'manual',
     })
     toast(coords ? 'Stay location saved.' : 'Saved without a pin — travel times stay hidden.')
     setName('')
-    setLink('')
     setFound(null)
-    setNote('')
     onClose()
   }
 
@@ -626,35 +581,17 @@ function StaySheet({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Anil chettan's place, Bedok"
+            placeholder="e.g. Anil chettan's place"
             className={inputCls}
           />
         </Field>
-        <Field
-          label="Google Maps link (optional)"
-          hint="A full link has coordinates in it. A short maps.app.goo.gl link does not — the app will try to follow the redirect, and fall back to a name search."
-        >
-          <input
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            placeholder="https://…"
-            className={inputCls}
-            inputMode="url"
-          />
-        </Field>
-        <Btn full onClick={resolve} disabled={busy || (!name.trim() && !link.trim())}>
-          {busy ? <Spinner size={14} /> : <Search size={14} />} Find it
-        </Btn>
-        {note && <p className="text-[12px] leading-snug text-mute">{note}</p>}
-        {found && (
-          <>
-            <MapView
-              points={[{ id: 's', name: name || 'Your stay', coords: found, badge: '⌂', kind: 'stay' }]}
-              height={190}
-            />
-            <Chip tone="walk">{areaFor(found)}</Chip>
-          </>
-        )}
+
+        <LocationFinder
+          value={found}
+          onChange={setFound}
+          placeholder="Postal code is easiest — ask them for the 6 digits"
+        />
+
         <div className="flex gap-2">
           <Btn variant="quiet" className="flex-1" onClick={() => save(false)}>
             Save without a pin
