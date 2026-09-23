@@ -66,6 +66,7 @@ export function Itinerary({
   const rawItems = useTrip((s) => s.items)
   const customPlaces = useTrip((s) => s.customPlaces)
   const tickets = useTrip((s) => s.tickets)
+  const anchors = useTrip((s) => s.anchors)
   const all = useAllItems()
   const ctx = useTripContext()
   const { call, hasKey } = useAi()
@@ -93,7 +94,10 @@ export function Itinerary({
     return m
   }, [tickets])
   const legs = useMemo(() => legsForDay(items, stay), [items, stay])
-  const warnings = useMemo(() => tripWarnings(all, setup, stay), [all, setup, stay])
+  const warnings = useMemo(
+    () => tripWarnings(all, setup, stay, anchors),
+    [all, setup, stay, anchors],
+  )
   const dayWarnings = warnings.filter((w) => w.day === day)
   const globalWarnings = warnings.filter((w) => !w.day)
 

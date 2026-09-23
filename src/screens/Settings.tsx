@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
+  TriangleAlert,
 } from 'lucide-react'
 import { Btn, Chip, Field, inputCls, Segmented, Sheet, Spinner } from '../components/ui'
 import { MapView } from '../components/LazyMap'
@@ -19,7 +20,7 @@ import { DEFAULT_PACKING } from '../lib/store'
 import { areaFor } from '../data/places'
 import { applyUpdate, BUILD_ID, checkForUpdate, usePwa } from '../lib/pwa'
 import { MODEL, TIER_LABEL } from '../lib/ai'
-import { dateOf, timeOf } from '../lib/trip'
+import { dateForDay, dateOf, dayCount, strandedAnchors, timeOf, ymd } from '../lib/trip'
 import { requestNotificationPermission } from '../lib/tracking'
 
 export function Settings({ toast }: { toast: (t: string) => void }) {
@@ -43,6 +44,12 @@ export function Settings({ toast }: { toast: (t: string) => void }) {
   const [stayOpen, setStayOpen] = useState(false)
   const [checking, setChecking] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+
+  /** Bookings whose date no longer falls inside the trip. */
+  const stranded = strandedAnchors(setup, anchors)
+  const strandedKeys = new Set(stranded.map((a) => a.key))
+  const firstDay = ymd(dateForDay(setup, 1))
+  const lastDay = ymd(dateForDay(setup, dayCount(setup)))
 
   const setDateTime = (
     field: 'outboundISO' | 'arriveISO' | 'departISO',
@@ -161,21 +168,63 @@ export function Settings({ toast }: { toast: (t: string) => void }) {
       {/* ---- fixed blocks ---- */}
       <Section title="The fixed points" hint="These generate the locked blocks nothing can move.">
         <div className="space-y-3">
-          <Field label="Universal Studios day">
+          {stranded.length > 0 && (
+            <div className="rounded-xl border border-danger/45 bg-danger/8 p-3">
+              <div className="flex items-start gap-2">
+                <TriangleAlert size={15} className="mt-0.5 shrink-0 text-danger" />
+                <div className="min-w-0 text-[12.5px] leading-snug text-danger">
+                  {stranded.map((a) => (
+                    <p key={a.key}>
+                      <b>{a.label}</b> is set to {a.date}, outside {firstDay} – {lastDay}. Its block
+                      has vanished from the plan.
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <Btn
+                full
+                className="mt-2.5"
+                onClick={() => {
+                  // Keep whatever day-of-trip each booking sat on, so shifting
+                  // the flights carries the bookings along instead of dropping
+                  // them on day one.
+                  const patch: Record<string, string> = {}
+                  for (const a of stranded) patch[a.key] = firstDay
+                  setAnchors(patch as never)
+                  toast('Moved into the trip — check the day is right.')
+                }}
+              >
+                Move {stranded.length === 1 ? 'it' : 'them'} to {firstDay}
+              </Btn>
+            </div>
+          )}
+          <Field
+            label="Universal Studios day"
+            hint={strandedKeys.has('ussDate') ? 'Outside the trip dates.' : undefined}
+          >
             <input
               type="date"
+              min={firstDay}
+              max={lastDay}
               value={anchors.ussDate}
               onChange={(e) => setAnchors({ ussDate: e.target.value })}
-              className={inputCls}
+              className={`${inputCls} ${strandedKeys.has('ussDate') ? 'border-danger/60' : ''}`}
             />
           </Field>
           <div className="grid grid-cols-2 gap-2">
-            <Field label="Concert date">
+            <Field
+              label="Concert date"
+              hint={strandedKeys.has('concertDate') ? 'Outside the trip dates.' : undefined}
+            >
               <input
                 type="date"
+                min={firstDay}
+                max={lastDay}
                 value={anchors.concertDate}
                 onChange={(e) => setAnchors({ concertDate: e.target.value })}
-                className={inputCls}
+                className={`${inputCls} ${
+                  strandedKeys.has('concertDate') ? 'border-danger/60' : ''
+                }`}
               />
             </Field>
             <Field label="Show starts">

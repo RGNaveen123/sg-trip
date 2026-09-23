@@ -356,13 +356,49 @@ export interface Warning {
   day?: number
 }
 
+/** A fixed block whose date no longer falls inside the trip. */
+export interface StrandedAnchor {
+  key: 'ussDate' | 'concertDate'
+  label: string
+  date: string
+}
+
+/**
+ * Anchors are absolute dates because the bookings they represent are. Move the
+ * flights and an anchor can fall outside the trip entirely — at which point
+ * `fixedBlocks` stops emitting it and the commitment silently disappears.
+ * This finds those so the UI can shout about it.
+ */
+export function strandedAnchors(setup: TripSetup, anchors: Anchors): StrandedAnchor[] {
+  const out: StrandedAnchor[] = []
+  if (!dayForDate(setup, anchors.ussDate)) {
+    out.push({ key: 'ussDate', label: 'Universal Studios', date: anchors.ussDate })
+  }
+  if (!dayForDate(setup, anchors.concertDate)) {
+    out.push({ key: 'concertDate', label: 'The concert', date: anchors.concertDate })
+  }
+  return out
+}
+
 export function tripWarnings(
   all: ItineraryItem[],
   setup: TripSetup,
   stay: Stay | null,
+  anchors?: Anchors,
 ): Warning[] {
   const out: Warning[] = []
   const days = dayCount(setup)
+
+  // Loudest first: a booking that has fallen off the end of the trip.
+  if (anchors) {
+    for (const a of strandedAnchors(setup, anchors)) {
+      out.push({
+        id: `stranded-${a.key}`,
+        level: 'danger',
+        text: `${a.label} is booked for ${a.date}, which is outside these trip dates — so its block has disappeared from the plan. Fix the date in Settings.`,
+      })
+    }
+  }
 
   for (let day = 1; day <= days; day++) {
     const items = itemsForDay(all, day)

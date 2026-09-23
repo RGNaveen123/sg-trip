@@ -17,9 +17,11 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['icon-192.png', 'icon-512.png', 'maskable-512.png'],
       manifest: {
-        name: 'Singapore Trip — 17–21 Dec',
+        // Baked into the installed app's home-screen label, so it cannot carry
+        // a date — changing the flights would leave the icon lying.
+        name: 'Singapore Trip Planner',
         short_name: 'SG Trip',
-        description: 'Offline-first trip planner for the Singapore trip.',
+        description: 'Offline-first planner for the Singapore trip — itinerary, tickets, spending.',
         theme_color: '#07120F',
         background_color: '#07120F',
         display: 'standalone',

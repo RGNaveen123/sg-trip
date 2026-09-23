@@ -14,6 +14,9 @@ import {
   itemsForDay,
   allItems,
   tripWarnings,
+  strandedAnchors,
+  dateForDay,
+  ymd,
 } from '../src/lib/trip'
 import { parseCoordsFromUrl, isShortenedMapsLink, estimateTravel } from '../src/lib/geo'
 import { beneficiaries, buildLedger, settle, splitCents, toCents } from '../src/lib/settle'
@@ -289,6 +292,45 @@ const outsider = buildLedger(
 )
 ok('someone named only inside a split still lands in the ledger', outsider.people.includes('Cal'))
 ok('and that still nets to zero', Object.values(outsider.net).reduce((a, b) => a + b, 0) === 0)
+
+
+console.log('\n— moving the trip dates —')
+const moved = { ...setup, arriveISO: '2026-12-14T06:00', departISO: '2026-12-18T20:20' }
+ok('day count follows the new dates', dayCount(moved) === 5, dayCount(moved))
+ok(
+  'day 1 is the new arrival date',
+  ymd(dateForDay(moved, 1)) === '2026-12-14',
+  ymd(dateForDay(moved, 1)),
+)
+
+const movedFixed = fixedBlocks(moved, anchors, stay)
+ok(
+  'the concert block disappears when its date falls outside the trip',
+  !movedFixed.some((f) => f.id === 'fx-concert'),
+)
+const strandedNow = strandedAnchors(moved, anchors)
+ok('and that is reported rather than silent', strandedNow.some((a) => a.key === 'concertDate'))
+ok(
+  'the warning is danger level, not a note',
+  tripWarnings([], moved, null, anchors).find((w) => w.id === 'stranded-concertDate')?.level ===
+    'danger',
+)
+ok(
+  'Universal is still inside 14-18 Dec so it is not flagged',
+  !strandedNow.some((a) => a.key === 'ussDate'),
+)
+ok('nothing is stranded on the original dates', strandedAnchors(setup, anchors).length === 0)
+ok(
+  'no stranded warnings when anchors are in range',
+  !tripWarnings([], setup, null, anchors).some((w) => w.id.startsWith('stranded-')),
+)
+ok(
+  'omitting anchors keeps the old behaviour',
+  !tripWarnings([], moved, null).some((w) => w.id.startsWith('stranded-')),
+)
+
+const both = { ...setup, arriveISO: '2026-11-01T06:00', departISO: '2026-11-05T20:20' }
+ok('a trip in a different month strands both bookings', strandedAnchors(both, anchors).length === 2)
 
 
 console.log(`\n${pass} passed, ${fail} failed\n`)

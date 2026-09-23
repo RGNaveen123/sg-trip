@@ -132,6 +132,12 @@ export default function App() {
     scrollRef.current?.scrollTo({ top: 0 })
   }, [view])
 
+  // The tab title follows the trip. It used to be hard-coded in index.html and
+  // went stale the moment the dates changed.
+  useEffect(() => {
+    document.title = `SG Trip · ${range}`
+  }, [range])
+
   const goAsk = useCallback((prompt: string) => {
     setAskPrefill(prompt)
     setView('ask')
