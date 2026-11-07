@@ -14,7 +14,7 @@ import type {
   Pass,
   TripSetup,
 } from './types'
-import { DEFAULT_ANCHORS, DEFAULT_SETUP, type Anchors } from './trip'
+import { dateOf, DEFAULT_ANCHORS, DEFAULT_SETUP, parseLocal, type Anchors } from './trip'
 import { STORE_KEY } from './storageKey'
 
 export interface PlaceInfo {
@@ -338,11 +338,32 @@ export const useTrip = create<State>()(
     }),
     {
       name: STORE_KEY,
-      version: 2,
-      // v2: the stay address is known now — fill it in for phones that never set one.
+      version: 3,
       migrate: (persisted, version) => {
         const s = persisted as Partial<State>
-        if (version < 2 && !s.stay) s.stay = DEFAULT_STAY
+        // v3: the real stay and the real dates (land 15 Dec, fly home 21 Dec)
+        // are known now — they win over whatever an older build saved.
+        if (version < 3) {
+          s.stay = DEFAULT_STAY
+          const oldArrive = s.setup?.arriveISO
+          s.setup = {
+            ...DEFAULT_SETUP,
+            ...s.setup,
+            outboundISO: DEFAULT_SETUP.outboundISO,
+            arriveISO: DEFAULT_SETUP.arriveISO,
+            departISO: DEFAULT_SETUP.departISO,
+          }
+          // Items are stored by day number; keep each on the calendar date it
+          // was planned for, now that day 1 is earlier.
+          if (oldArrive && s.items) {
+            const shift = Math.round(
+              (parseLocal(dateOf(oldArrive)).getTime() -
+                parseLocal(dateOf(DEFAULT_SETUP.arriveISO)).getTime()) /
+                86400000,
+            )
+            if (shift) s.items = s.items.map((i) => ({ ...i, day: i.day + shift }))
+          }
+        }
         return s as State
       },
       // Explicit allow-list: everything the trip is, nothing transient.

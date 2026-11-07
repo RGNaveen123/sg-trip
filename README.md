@@ -1,7 +1,7 @@
 # SG Trip
 
-An installable, offline-first trip planner for a five-day Singapore trip —
-Kochi → Singapore on Singapore Airlines, landing 06:00 on 17 Dec, flying home
+An installable, offline-first trip planner for a week-long Singapore trip (15–21 Dec) —
+Kochi → Singapore on Singapore Airlines, landing 06:00 on 15 Dec, flying home
 20:20 on 21 Dec. Built to be used on a phone, one-handed, outdoors.
 
 No account, no backend. Everything lives in `localStorage` on the device. The

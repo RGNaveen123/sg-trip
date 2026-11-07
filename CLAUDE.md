@@ -1,7 +1,7 @@
 # SG Trip — working notes for Claude
 
 A personal, offline-first PWA trip planner for **three siblings in Singapore,
-17–21 Dec 2026**. Not a product. One device, no backend, no accounts.
+15–21 Dec 2026**. Not a product. One device, no backend, no accounts.
 
 Read this before changing anything. Most of what follows is *why*, not *what* —
 the what is in the code.
@@ -29,7 +29,7 @@ every deploy.
 | | |
 |---|---|
 | Route | Kochi → Singapore, round trip, Singapore Airlines |
-| Out | leaves Kochi night of 16 Dec, lands Singapore **06:00, 17 Dec** |
+| Out | leaves Kochi night of 14 Dec, lands Singapore **06:00, 15 Dec** |
 | Back | leaves Singapore **20:20, 21 Dec** |
 | Stay | a relative's flat, Blk 205 Yishun Street 21, postal 760205. **A guest house — never call it a hotel, anywhere, including in prompts** |
 | Universal Studios | 18 Dec, full day |

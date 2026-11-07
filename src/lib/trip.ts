@@ -38,8 +38,8 @@ export const DEFAULT_ANCHORS: Anchors = {
 }
 
 export const DEFAULT_SETUP: TripSetup = {
-  outboundISO: '2026-12-16T22:45',
-  arriveISO: '2026-12-17T06:00',
+  outboundISO: '2026-12-14T22:45',
+  arriveISO: '2026-12-15T06:00',
   departISO: '2026-12-21T20:20',
   homeCurrency: 'INR',
   pace: 'balanced',

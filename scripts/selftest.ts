@@ -45,7 +45,7 @@ const stay: Stay = {
 }
 
 console.log('\n— trip shape —')
-ok('five days on the ground', dayCount(setup) === 5, dayCount(setup))
+ok('seven days on the ground', dayCount(setup) === 7, dayCount(setup))
 
 const fixed = fixedBlocks(setup, anchors, stay)
 const ids = fixed.map((f) => f.id)
@@ -55,8 +55,8 @@ ok(
   'no transfer block without a stay',
   !fixedBlocks(setup, anchors, null).some((f) => f.id === 'fx-transfer'),
 )
-ok('Universal lands on day 2', fixed.find((f) => f.id === 'fx-uss')?.day === 2)
-ok('concert lands on day 4', fixed.find((f) => f.id === 'fx-concert')?.day === 4)
+ok('Universal lands on day 4', fixed.find((f) => f.id === 'fx-uss')?.day === 4)
+ok('concert lands on day 6', fixed.find((f) => f.id === 'fx-concert')?.day === 6)
 ok(
   'concert starts three hours before the show',
   fixed.find((f) => f.id === 'fx-concert')?.start === '16:00',
@@ -69,7 +69,7 @@ ok(
   'departure block starts 3h before the 20:20 flight',
   fixed.find((f) => f.id === 'fx-departure')?.start === '17:20',
 )
-ok('departure sits on the last day', fixed.find((f) => f.id === 'fx-departure')?.day === 5)
+ok('departure sits on the last day', fixed.find((f) => f.id === 'fx-departure')?.day === 7)
 ok('every fixed block is locked', fixed.every((f) => f.locked))
 
 console.log('\n— travel legs —')
@@ -117,7 +117,7 @@ ok('after the last train, a taxi is suggested', lateNight[1].mode === 'taxi' && 
 
 console.log('\n— free slots —')
 const slots = freeSlots(all, setup)
-ok('day 2 has no free slot before Universal opens at 09:30', !slots.some((s) => s.day === 2 && s.start < '09:30'))
+ok('day 4 has no free slot before Universal opens at 09:30', !slots.some((s) => s.day === 4 && s.start < '09:30'))
 ok('day 1 never offers a slot before the plane lands', !slots.some((s) => s.day === 1 && s.start < '06:00'))
 ok('there are open slots to fill', slots.length > 0, slots.length)
 
