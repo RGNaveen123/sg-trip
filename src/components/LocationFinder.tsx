@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Crosshair, Link2, MapPin, Search, Sparkles, TriangleAlert } from 'lucide-react'
 import { Btn, Chip, Field, inputCls, Segmented, spring, Spinner } from './ui'
 import { MapView } from './LazyMap'
 import { areaFor } from '../data/places'
 import { useAi } from '../lib/hooks'
+import { useTrip } from '../lib/store'
 import {
   findPlace,
   isPostalCode,
@@ -46,6 +47,11 @@ export function LocationFinder({
 }) {
   const [mode, setMode] = useState<Mode>('search')
   const { call, hasKey } = useAi()
+  const stay = useTrip((s) => s.stay)
+  const near = useMemo(
+    () => (stay?.coords ? { coords: stay.coords, area: stay.area } : null),
+    [stay],
+  )
 
   // search
   const [query, setQuery] = useState('')
@@ -75,7 +81,7 @@ export function LocationFinder({
     const mine = ++seq.current
     setSearching(true)
     const t = setTimeout(async () => {
-      const r = await findPlace(q)
+      const r = await findPlace(q, near)
       if (seq.current !== mine) return
       setHits(r)
       setSearched(true)
@@ -85,7 +91,7 @@ export function LocationFinder({
       clearTimeout(t)
       if (seq.current === mine) setSearching(false)
     }
-  }, [query])
+  }, [query, near])
 
   const useMyLocation = () => {
     if (!('geolocation' in navigator)) {
@@ -153,7 +159,7 @@ export function LocationFinder({
       const named = nameFromMapsUrl(raw)
       if (named) {
         push(`Place name found in the link: "${named}"`, 'ok')
-        const g = await findPlace(named)
+        const g = await findPlace(named, near)
         if (g.length) {
           push(`Matched "${g[0].name}"`, 'ok')
           onChange({ coords: g[0].coords, label: g[0].name, source: 'geocode' })
@@ -240,6 +246,7 @@ export function LocationFinder({
           <p className="text-[11px] leading-snug text-mute-2">
             Searches Singapore&apos;s official address register first, so building names, HDB
             blocks and postal codes all resolve exactly. A postal code is the surest thing to use.
+            {near && ' Closest to your stay comes first.'}
           </p>
 
           <AnimatePresence initial={false}>
@@ -266,6 +273,9 @@ export function LocationFinder({
                       </div>
                     )}
                   </div>
+                  {h.km !== undefined && (
+                    <Chip tone="walk">{h.km < 1 ? `${Math.round(h.km * 1000)} m` : `${h.km.toFixed(1)} km`}</Chip>
+                  )}
                   {h.postal && <Chip tone="mute">{h.postal}</Chip>}
                 </div>
               </motion.button>

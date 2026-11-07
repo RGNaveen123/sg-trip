@@ -137,12 +137,20 @@ export const DEFAULT_PACKING: Omit<PackingItem, 'id' | 'packed'>[] = [
   { text: 'Card that does not charge forex fees', reason: 'money' },
 ]
 
+/** The relative's flat in Yishun — pinned from OneMap, postal 760205. */
+export const DEFAULT_STAY: Stay = {
+  name: 'Blk 205 Yishun Street 21 #08-215',
+  coords: { lat: 1.431066, lng: 103.836307 },
+  area: 'Yishun',
+  rawInput: 'onemap',
+}
+
 export const useTrip = create<State>()(
   persist(
     (set, get) => ({
       setup: DEFAULT_SETUP,
       anchors: DEFAULT_ANCHORS,
-      stay: null,
+      stay: DEFAULT_STAY,
       items: [],
       customPlaces: [],
       expenses: [],
@@ -330,7 +338,13 @@ export const useTrip = create<State>()(
     }),
     {
       name: STORE_KEY,
-      version: 1,
+      version: 2,
+      // v2: the stay address is known now — fill it in for phones that never set one.
+      migrate: (persisted, version) => {
+        const s = persisted as Partial<State>
+        if (version < 2 && !s.stay) s.stay = DEFAULT_STAY
+        return s as State
+      },
       // Explicit allow-list: everything the trip is, nothing transient.
       partialize: (s) => ({
         setup: s.setup,

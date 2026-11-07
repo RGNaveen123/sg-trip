@@ -18,6 +18,7 @@ export const AREAS: { name: string; centre: LatLng }[] = [
   { name: 'Mandai & the North', centre: { lat: 1.402, lng: 103.79 } },
   { name: 'Jurong & the West', centre: { lat: 1.335, lng: 103.732 } },
   { name: 'Changi', centre: { lat: 1.36, lng: 103.989 } },
+  { name: 'Yishun', centre: { lat: 1.4295, lng: 103.835 } },
   { name: 'Woodlands & Far North', centre: { lat: 1.436, lng: 103.786 } },
   { name: 'Punggol & the Northeast', centre: { lat: 1.399, lng: 103.907 } },
 ]

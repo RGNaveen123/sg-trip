@@ -4,7 +4,7 @@
  * none of it is load-bearing.
  */
 import type { LatLng } from './types'
-import { isNearSingapore, parseCoordsFromUrl } from './geo'
+import { haversineKm, isNearSingapore, parseCoordsFromUrl } from './geo'
 
 // ---------------------------------------------------------------- Wikipedia
 
@@ -117,6 +117,8 @@ export interface GeocodeHit {
   /** Singapore six-digit postal code. */
   postal?: string
   source: 'onemap' | 'photon' | 'osm'
+  /** Straight-line km from the stay, when search was asked to stay close. */
+  km?: number
 }
 
 /** A Singapore postal code identifies exactly one building. */
@@ -142,7 +144,7 @@ export async function searchOneMap(query: string): Promise<GeocodeHit[]> {
     const j = await r.json()
     return (j.results ?? [])
       .filter((h: Record<string, string>) => h.LATITUDE && h.LONGITUDE)
-      .slice(0, 8)
+      .slice(0, 10)
       .map((h: Record<string, string>) => ({
         name: titleCase(h.SEARCHVAL || h.BUILDING || h.ROAD_NAME || q),
         coords: { lat: parseFloat(h.LATITUDE), lng: parseFloat(h.LONGITUDE) },
@@ -173,7 +175,7 @@ function titleCase(s: string): string {
 }
 
 /** Photon: keyless OSM search, better than Nominatim at partial names. */
-export async function searchPhoton(query: string): Promise<GeocodeHit[]> {
+export async function searchPhoton(query: string, near?: LatLng | null): Promise<GeocodeHit[]> {
   try {
     const u = new URL('https://photon.komoot.io/api/')
     u.searchParams.set('q', query)
@@ -181,6 +183,10 @@ export async function searchPhoton(query: string): Promise<GeocodeHit[]> {
     u.searchParams.set('lang', 'en')
     // Bias hard towards Singapore rather than matching a namesake abroad.
     u.searchParams.set('bbox', '103.59,1.15,104.10,1.48')
+    if (near) {
+      u.searchParams.set('lat', String(near.lat))
+      u.searchParams.set('lon', String(near.lng))
+    }
     const r = await fetch(u.toString())
     if (!r.ok) return []
     const j = await r.json()
@@ -205,10 +211,42 @@ export async function searchPhoton(query: string): Promise<GeocodeHit[]> {
 /**
  * Everything in one call, best source first. Nothing here costs money or
  * needs a key, so there is no reason not to try all three.
+ *
+ * Given `near` (the stay), both gazetteers are asked at once and the merged
+ * hits come back closest first — "McDonald's" should mean the one in Yishun,
+ * not whichever OneMap lists first.
  */
-export async function findPlace(query: string): Promise<GeocodeHit[]> {
+export async function findPlace(
+  query: string,
+  near?: { coords: LatLng; area?: string | null } | null,
+): Promise<GeocodeHit[]> {
   const q = query.trim()
   if (!q) return []
+
+  if (near && !isPostalCode(q)) {
+    // OneMap has no proximity bias, only ten hits a page — so also ask it for
+    // the same thing in the stay's neighbourhood ("hawker centre yishun").
+    const local =
+      near.area && !q.toLowerCase().includes(near.area.toLowerCase())
+        ? searchOneMap(`${q} ${near.area}`)
+        : Promise.resolve([])
+    const [nearby, wide, photon] = await Promise.all([
+      local,
+      searchOneMap(q),
+      searchPhoton(q, near.coords),
+    ])
+    const onemap = [...nearby, ...wide.filter((w) => !nearby.some((n) => n.name === w.name))]
+    let hits = [
+      ...onemap,
+      // Same spot from both sources — keep OneMap's, it has the postal code.
+      ...photon.filter((p) => !onemap.some((o) => haversineKm(o.coords, p.coords) < 0.1)),
+    ]
+    if (!hits.length) hits = await geocode(`${q}, Singapore`)
+    return hits
+      .map((h) => ({ ...h, km: haversineKm(near.coords, h.coords) }))
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 10)
+  }
 
   const onemap = await searchOneMap(q)
   if (onemap.length) return onemap
