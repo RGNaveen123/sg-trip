@@ -1,4 +1,5 @@
 import type { LatLng } from './types'
+import type { MrtRoute } from './mrt'
 
 export type TravelMode = 'walk' | 'transit' | 'taxi'
 
@@ -20,6 +21,8 @@ export interface TravelEstimate {
   taxiMin: number
   /** What we would do by default: cheapest thing that is not silly. */
   suggested: TravelMode
+  /** The train journey behind transitMin, when there is a sensible one. */
+  mrt?: MrtRoute
 }
 
 /**
@@ -65,6 +68,17 @@ export function directionsUrl(
   if (from) params.set('origin', `${from.lat},${from.lng}`)
   const q = params.toString().replace('&destination_place_id=', '')
   return `https://www.google.com/maps/dir/?${q}`
+}
+
+/**
+ * Citymapper knows every MRT line, platform exit and disruption in Singapore.
+ * This link opens the app when it is installed, the website when it is not.
+ */
+export function citymapperUrl(from: LatLng | null, to: LatLng, toName?: string): string {
+  const params = new URLSearchParams({ endcoord: `${to.lat},${to.lng}` })
+  if (toName) params.set('endname', toName)
+  if (from) params.set('startcoord', `${from.lat},${from.lng}`)
+  return `https://citymapper.com/directions?${params.toString()}`
 }
 
 export function mapsPlaceUrl(c: LatLng, name?: string): string {

@@ -2,6 +2,7 @@ import type { CostTier, ItineraryItem, Place, Stay, TripAction, TripSetup, Valid
 import { PLACES } from '../data/places'
 import { dateForDay, dayCount, formatDayLabel, endOf } from './trip'
 import { formatDuration, isValidTime, toMinutes } from './geo'
+import { estimateJourney, nearestStations, routeSummary, stationLabel } from './mrt'
 
 /**
  * One model, the cheapest one, for everything. This is deliberate and the
@@ -140,7 +141,13 @@ export function tripStateBlock(c: TripContext): string {
   lines.push(
     `STAY: ${c.stay?.name ? `${c.stay.name}${c.stay.area ? ` (${c.stay.area})` : ''}` : 'not set'} — a relative's guest house, NOT a hotel. Never call it a hotel.`,
   )
-  lines.push(`PACE: ${c.setup.pace}. Budget-conscious: MRT and bus by default, taxi only for genuinely tight transitions.`)
+  if (c.stay?.coords) {
+    const [home] = nearestStations(c.stay.coords, 1)
+    lines.push(
+      `HOME STATION: ${stationLabel(home.station)}, about ${home.walkMin} min on foot from the door. The stay is in the far north, so nearly every day starts and ends with an MRT ride.`,
+    )
+  }
+  lines.push(`PACE: ${c.setup.pace}. Budget-conscious: MRT by default, bus where the MRT does not reach, taxi only for genuinely tight transitions or after the last train.`)
   lines.push('')
   lines.push('CURRENT ITINERARY (id | day | start | duration | name). LOCKED rows cannot be moved or removed:')
   for (let d = 1; d <= days; d++) {
@@ -158,12 +165,38 @@ export function tripStateBlock(c: TripContext): string {
     }
   }
   lines.push('')
-  lines.push('PLACE CATALOGUE (placeId | name | area | typical minutes):')
-  for (const p of [...PLACES, ...c.customPlaces]) {
-    if (p.category === 'transit') continue
-    lines.push(`  ${p.id} | ${p.name} | ${p.area} | ${p.typicalMin}`)
+  const from = c.stay?.coords
+  lines.push(
+    from
+      ? 'PLACE CATALOGUE, nearest to the stay first (placeId | name | area | typical minutes | door-to-door from the stay):'
+      : 'PLACE CATALOGUE (placeId | name | area | typical minutes):',
+  )
+  const catalogue = [...PLACES, ...c.customPlaces]
+    .filter((p) => p.category !== 'transit')
+    .map((p) => ({ p, j: from ? journeyFromStay(from, p) : null }))
+    .sort((a, b) => (a.j?.min ?? 0) - (b.j?.min ?? 0))
+  for (const { p, j } of catalogue) {
+    lines.push(`  ${p.id} | ${p.name} | ${p.area} | ${p.typicalMin}${j ? ` | ${j.text}` : ''}`)
   }
   return lines.join('\n')
+}
+
+/** Routing every place on every message is wasteful; the answers never change. */
+const journeyCache = new Map<string, { min: number; text: string }>()
+
+function journeyFromStay(from: { lat: number; lng: number }, p: Place): { min: number; text: string } {
+  const key = `${from.lat},${from.lng}|${p.coords.lat},${p.coords.lng}`
+  const hit = journeyCache.get(key)
+  if (hit) return hit
+  const e = estimateJourney(from, p.coords)
+  const out =
+    e.suggested === 'walk'
+      ? { min: e.walkMin, text: `${e.walkMin} min walk` }
+      : e.mrt
+        ? { min: e.mrt.minutes, text: `${e.mrt.minutes} min MRT: ${routeSummary(e.mrt)}` }
+        : { min: e.transitMin, text: `${e.transitMin} min by bus` }
+  journeyCache.set(key, out)
+  return out
 }
 
 export const ACTION_PROTOCOL = `
@@ -189,7 +222,7 @@ export function systemPrompt(c: TripContext): string {
   return [
     'You are the trip assistant inside a Singapore trip-planner app used by three siblings on the ground in Singapore.',
     'Answer briefly and practically. Assume phone screen, walking, humidity, and a real budget.',
-    'Prefer MRT and bus. Flag a taxi only when a connection is genuinely too tight or trains have stopped.',
+    'Prefer the MRT. When you give directions, name the line and the station codes (e.g. "North–South Line, Yishun NS13 → Orchard NS22, no change"). Flag a taxi only when a connection is genuinely too tight or trains have stopped.',
     'The accommodation is a free guest house at a relative\'s place. It is never a hotel.',
     'Use Markdown: short paragraphs, bullets, and small tables where a table genuinely helps.',
     '',
@@ -383,8 +416,12 @@ export function autoPlanPrompt(c: TripContext): string {
     '',
     'Requirements:',
     '- Work around the LOCKED blocks; never move or duplicate them.',
-    '- Night Safari must get an evening slot on a day that is not the Universal day or the concert day. It is out at Mandai, so allow real travel time and do not stack anything after it.',
+    '- Start close to the stay and work outward. The stay is in Yishun, in the far north: the first free day stays in the north (Yishun, Sembawang, Mandai), and each later free day reaches further — up the North–South Line to Bishan, Orchard and the Botanic Gardens, then the city (Marina Bay, Civic District, Chinatown, Bugis, Little India), and only then the east coast. Changi and Jewel belong to the last morning, on the way to the flight.',
+    '- Use the MRT for every leg. The catalogue lists door-to-door MRT time from the stay — allow that for the first ride out each morning and the ride home each night.',
+    '- Build each day along one MRT line where you can. The North–South Line runs from Yishun straight to Orchard, City Hall and Marina Bay with no change — lean on it.',
     '- Group each day geographically. Do not bounce across the island twice in a day.',
+    '- Night Safari must get an evening slot on a day that is not the Universal day or the concert day. From the stay it is close: one stop to Khatib, then the Mandai Khatib Shuttle. Do not stack anything after it.',
+    '- Be on a train home by about 23:00 — the last northbound trains to Yishun leave the city around 23:30.',
     '- Two meals a day from the catalogue: hawker centres by default, one or two sit-down restaurants across the whole trip.',
     '- Day 1 starts tired off a red-eye. Keep the first afternoon light and near the stay.',
     '- The Universal day already runs to about 19:00 — only an easy dinner after it, close to Sentosa or the stay.',

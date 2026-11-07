@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Plus, Search, ShoppingBag, Store, X } from 'lucide-react'
+import { ChevronDown, Plus, Search, ShoppingBag, Store, TrainFront, X } from 'lucide-react'
 import { Btn, Chip, spring } from '../components/ui'
 import { PlaceSheet } from '../components/PlaceSheet'
 import { ScheduleSheet } from '../components/ScheduleSheet'
@@ -9,6 +9,7 @@ import { CATEGORY_LABEL, CATEGORY_ORDER, CATEGORY_SHORT, CONVENIENCE_NOTE, PLACE
 import { useTrip } from '../lib/store'
 import { useAllItems } from '../lib/hooks'
 import { formatDuration } from '../lib/geo'
+import { estimateJourney } from '../lib/mrt'
 import type { Place, PlaceCategory } from '../lib/types'
 
 export function Places({
@@ -19,9 +20,10 @@ export function Places({
   onAsk: (prompt: string) => void
 }) {
   const customPlaces = useTrip((s) => s.customPlaces)
+  const stayCoords = useTrip((s) => s.stay?.coords ?? null)
   const all = useAllItems()
   const [query, setQuery] = useState('')
-  const [openArea, setOpenArea] = useState<string | null>('Marina Bay')
+  const [openArea, setOpenArea] = useState<string | null>(stayCoords ? 'Yishun' : 'Marina Bay')
   const [filter, setFilter] = useState<PlaceCategory | 'all'>('all')
   const [detail, setDetail] = useState<Place | null>(null)
   const [scheduling, setScheduling] = useState<Place | null>(null)
@@ -48,6 +50,28 @@ export function Places({
     })
   }, [pool, query, filter])
 
+  /** Door-to-door minutes from the stay, by MRT where that makes sense. */
+  const fromStay = useMemo(() => {
+    const m = new Map<string, { min: number; mrt: boolean }>()
+    if (!stayCoords) return m
+    for (const p of pool) {
+      const e = estimateJourney(stayCoords, p.coords)
+      m.set(
+        p.id,
+        e.suggested === 'walk'
+          ? { min: e.walkMin, mrt: false }
+          : { min: e.transitMin, mrt: Boolean(e.mrt) },
+      )
+    }
+    return m
+  }, [pool, stayCoords])
+
+  const areaMin = (places: Iterable<Place[]>) => {
+    let best = Infinity
+    for (const list of places) for (const p of list) best = Math.min(best, fromStay.get(p.id)?.min ?? Infinity)
+    return best
+  }
+
   /** Areas, then activity type inside each — never raw zone codes. */
   const grouped = useMemo(() => {
     const byArea = new Map<string, Map<PlaceCategory, Place[]>>()
@@ -57,8 +81,13 @@ export function Places({
       if (!cats.has(p.category)) cats.set(p.category, [])
       cats.get(p.category)!.push(p)
     }
-    return [...byArea.entries()].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0]))
-  }, [filtered])
+    // With a stay set, the trip works outward from it — so do the areas.
+    return [...byArea.entries()].sort((a, b) =>
+      fromStay.size
+        ? areaMin(a[1].values()) - areaMin(b[1].values())
+        : b[1].size - a[1].size || a[0].localeCompare(b[0]),
+    )
+  }, [filtered, fromStay])
 
   const searching = query.trim().length > 0
 
@@ -110,6 +139,7 @@ export function Places({
         {grouped.map(([area, cats]) => {
           const open = searching || openArea === area
           const count = [...cats.values()].reduce((n, l) => n + l.length, 0)
+          const nearest = areaMin(cats.values())
           return (
             <div key={area} className="card overflow-hidden">
               <button
@@ -122,6 +152,11 @@ export function Places({
                     {count} place{count === 1 ? '' : 's'} ·{' '}
                     {CATEGORY_ORDER.filter((c) => cats.has(c)).map((c) => CATEGORY_SHORT[c]).join(' · ')}
                   </div>
+                  {isFinite(nearest) && (
+                    <div className="mt-1 flex items-center gap-1 text-[11px] text-transit">
+                      <TrainFront size={11} /> {formatDuration(nearest)} from the stay
+                    </div>
+                  )}
                 </div>
                 <motion.span
                   animate={{ rotate: open ? 180 : 0 }}
@@ -151,6 +186,7 @@ export function Places({
                                 key={p.id}
                                 place={p}
                                 scheduled={scheduledIds.has(p.id)}
+                                fromStay={fromStay.get(p.id)}
                                 onOpen={() => setDetail(p)}
                               />
                             ))}
@@ -228,10 +264,12 @@ function FilterChip({
 function PlaceRow({
   place,
   scheduled,
+  fromStay,
   onOpen,
 }: {
   place: Place
   scheduled: boolean
+  fromStay?: { min: number; mrt: boolean }
   onOpen: () => void
 }) {
   return (
@@ -250,6 +288,12 @@ function PlaceRow({
       </div>
       <div className="flex shrink-0 flex-col items-end gap-1">
         <span className="font-mono text-[10px] text-mute-2">{formatDuration(place.typicalMin)}</span>
+        {fromStay && (
+          <span className="flex items-center gap-1 font-mono text-[10px] text-transit">
+            {fromStay.mrt && <TrainFront size={10} />}
+            {formatDuration(fromStay.min)}
+          </span>
+        )}
         {scheduled && <Chip tone="ok">on plan</Chip>}
       </div>
     </motion.button>

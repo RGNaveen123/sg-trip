@@ -7,6 +7,7 @@ import {
   ChevronDown,
   CloudRain,
   Footprints,
+  TrainFront,
   Info,
   Lock,
   MapPin,
@@ -22,6 +23,7 @@ import { Btn, Chip, Empty, spring, Spinner } from '../components/ui'
 import { ProposalCard } from '../components/ProposalCard'
 import { ScheduleSheet } from '../components/ScheduleSheet'
 import { TicketViewer } from '../components/TicketViewer'
+import { MrtRouteLine, TransitLinks } from '../components/MrtRoute'
 import { useTrip } from '../lib/store'
 import { useAi, useAllItems, useNow, useTripContext, useWeather } from '../lib/hooks'
 import {
@@ -561,7 +563,8 @@ const MODE_WORD: Record<string, string> = { walk: 'on foot', transit: 'by MRT/bu
 function LegRow({ leg, first }: { leg: Leg; first: boolean }) {
   if (leg.hidden || !leg.estimate || !leg.from) return null
 
-  const Icon = leg.mode === 'walk' ? Footprints : leg.mode === 'taxi' ? Car : Bus
+  const mrt = leg.mode === 'transit' ? leg.estimate.mrt : undefined
+  const Icon = leg.mode === 'walk' ? Footprints : leg.mode === 'taxi' ? Car : mrt ? TrainFront : Bus
   const colour =
     leg.mode === 'walk' ? 'text-walk' : leg.mode === 'taxi' ? 'text-taxi' : 'text-transit'
 
@@ -576,7 +579,7 @@ function LegRow({ leg, first }: { leg: Leg; first: boolean }) {
           {/* Only the first leg needs to name where you are coming from — after
               that it is obviously the stop directly above. */}
           <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-mute">
-            <span className={colour}>{leg.minutes}m</span> {MODE_WORD[leg.mode]} ·{' '}
+            <span className={colour}>{leg.minutes}m</span> {mrt ? 'by MRT' : MODE_WORD[leg.mode]} ·{' '}
             {leg.estimate.km} km
             {first && (
               <>
@@ -585,7 +588,7 @@ function LegRow({ leg, first }: { leg: Leg; first: boolean }) {
               </>
             )}
           </span>
-          {leg.to.coords && (
+          {leg.to.coords && !mrt && (
             <a
               href={directionsUrl(leg.from.coords, leg.to.coords, leg.mode)}
               target="_blank"
@@ -596,6 +599,12 @@ function LegRow({ leg, first }: { leg: Leg; first: boolean }) {
             </a>
           )}
         </div>
+        {mrt && leg.to.coords && (
+          <div className="mt-1 space-y-1 pl-[20px]">
+            <MrtRouteLine route={mrt} />
+            <TransitLinks from={leg.from.coords} to={leg.to.coords} toName={leg.to.name} />
+          </div>
+        )}
         {(leg.overlaps || leg.tight || leg.lateNight) && (
           <div className="mt-1 flex flex-wrap gap-1.5 pl-[20px]">
             {leg.overlaps && <Chip tone="danger">overlaps the stop before</Chip>}

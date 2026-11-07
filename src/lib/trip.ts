@@ -1,8 +1,8 @@
 import type { ItineraryItem, LatLng, Stay, TripSetup } from './types'
 import { PLACE_BY_ID } from '../data/places'
+import { estimateJourney } from './mrt'
 import {
   addMinutes,
-  estimateTravel,
   isAfterLastTrain,
   minutesFor,
   toMinutes,
@@ -280,7 +280,7 @@ export function legsForDay(
       continue
     }
 
-    const est = estimateTravel(fromCoords, to.coords)
+    const est = estimateJourney(fromCoords, to.coords)
     const lateNight = isAfterLastTrain(to.start)
     let mode: TravelMode = est.suggested
     const need = minutesFor(est, mode)

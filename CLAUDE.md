@@ -13,7 +13,7 @@ the what is in the code.
 ```bash
 npm run dev        # vite dev server
 npm run build      # tsc --noEmit, then vite build  (CI runs this)
-npm run selftest   # 85 assertions over the trip, settlement and AI-validation logic
+npm run selftest   # 94 assertions over the trip, MRT routing, settlement and AI-validation logic
 npm run icons      # regenerate PWA icons (pure-node PNG writer, no image deps)
 ```
 
@@ -98,12 +98,16 @@ src/
     settle.ts        who-owes-whom ledger, in integer cents
     ai.ts            the model call, the prompt, the validation gate
     geo.ts           distance, travel estimates, maps links, URL coordinate parsing
+    mrt.ts           offline MRT routing (Dijkstra over the line graph, plus the
+                     Mandai Khatib and Sentosa Express shuttles) — every transit
+                     estimate goes through estimateJourney()
     free.ts          every keyless public API
     tickets.ts       IndexedDB blob store for ticket images
     tracking.ts      opt-in day-of geolocation
     store.ts         zustand + persist (localStorage)
     storageKey.ts    namespaces storage so the preview build can't eat live data
-  data/places.ts     ~60 curated Singapore places
+  data/places.ts     ~65 curated Singapore places, incl. a Yishun set near the stay
+  data/mrt.ts        137 MRT stations (OneMap positions, frozen) and line order
 scripts/
   selftest.ts        the test suite
   make-icons.mjs     PNG icon generator, no image dependencies

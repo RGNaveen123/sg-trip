@@ -19,6 +19,8 @@ import {
   ymd,
 } from '../src/lib/trip'
 import { parseCoordsFromUrl, isShortenedMapsLink, estimateTravel } from '../src/lib/geo'
+import { mrtRoute, nearestStations, routeSummary } from '../src/lib/mrt'
+import { PLACE_BY_ID } from '../src/data/places'
 import { beneficiaries, buildLedger, settle, splitCents, toCents } from '../src/lib/settle'
 import type { Expense, ItineraryItem, Stay } from '../src/lib/types'
 
@@ -332,6 +334,28 @@ ok(
 const both = { ...setup, arriveISO: '2026-11-01T06:00', departISO: '2026-11-05T20:20' }
 ok('a trip in a different month strands both bookings', strandedAnchors(both, anchors).length === 2)
 
+
+console.log('\n— MRT from the Yishun stay —')
+// Blk 205 Yishun Street 21, as pinned in the store's default stay.
+const home = { lat: 1.431066, lng: 103.836307 }
+const at = (id: string) => PLACE_BY_ID.get(id)!.coords
+const homeStation = nearestStations(home, 1)[0]
+ok('the home station is Yishun', homeStation.station.name === 'Yishun')
+ok('Yishun is a short walk', homeStation.walkMin <= 6, homeStation.walkMin)
+const toMerlion = mrtRoute(home, at('merlion'))
+ok('Merlion is straight down the North–South Line', toMerlion?.changes === 0 && toMerlion?.steps[0].line === 'NS', toMerlion && routeSummary(toMerlion))
+const toSafari = mrtRoute(home, at('night-safari'))
+ok('Night Safari goes via Khatib and the Mandai shuttle', toSafari?.alight.name === 'Khatib' && toSafari?.feederTo === 'Mandai Khatib Shuttle', toSafari && routeSummary(toSafari))
+ok('Night Safari is under an hour from the stay', (toSafari?.minutes ?? 99) < 60, toSafari?.minutes)
+const toUss = mrtRoute(home, at('uss'))
+ok('Universal goes via HarbourFront and the Sentosa Express', toUss?.alight.name === 'HarbourFront' && toUss?.feederTo === 'Sentosa Express', toUss && routeSummary(toUss))
+const toStadium = mrtRoute(home, at('national-stadium'))
+ok('the concert is reachable by MRT', Boolean(toStadium) && (toStadium?.minutes ?? 99) < 75, toStadium && routeSummary(toStadium))
+const toJewel = mrtRoute(home, at('jewel'))
+ok('Jewel needs the change at Tanah Merah', toJewel?.changeAt.includes('Tanah Merah') ?? false, toJewel && routeSummary(toJewel))
+const nearer = mrtRoute(home, at('bishan-amk-park'))!.minutes
+const further = mrtRoute(home, at('merlion'))!.minutes
+ok('Bishan is nearer than the Merlion', nearer < further, [nearer, further])
 
 console.log(`\n${pass} passed, ${fail} failed\n`)
 process.exit(fail ? 1 : 0)

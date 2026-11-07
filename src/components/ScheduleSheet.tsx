@@ -15,10 +15,11 @@ import {
 import {
   addMinutes,
   directionsUrl,
-  estimateTravel,
   formatDuration,
   toMinutes,
 } from '../lib/geo'
+import { estimateJourney } from '../lib/mrt'
+import { MrtRouteLine, TransitLinks } from './MrtRoute'
 import type { ItineraryItem, Place } from '../lib/types'
 
 interface Props {
@@ -94,7 +95,10 @@ export function ScheduleSheet({ open, onClose, place, editing, onDone }: Props) 
   }, [fromOptions, fromId])
 
   const from = fromOptions.find((o) => o.id === fromId) ?? null
-  const estimate = from?.coords && coords ? estimateTravel(from.coords, coords) : null
+  const estimate = useMemo(
+    () => (from?.coords && coords ? estimateJourney(from.coords, coords) : null),
+    [from?.coords, coords],
+  )
 
   // Suggest a start time that actually accounts for getting there.
   useEffect(() => {
@@ -208,10 +212,16 @@ export function ScheduleSheet({ open, onClose, place, editing, onDone }: Props) 
             <div className="lbl mb-2">Getting there · about {estimate.km} km</div>
             <div className="grid grid-cols-3 gap-2">
               <ModeCell icon={<Footprints size={13} />} label="Walk" mins={estimate.walkMin} tone="walk" />
-              <ModeCell icon={<Bus size={13} />} label="MRT/bus" mins={estimate.transitMin} tone="transit" />
+              <ModeCell icon={<Bus size={13} />} label={estimate.mrt ? 'MRT' : 'MRT/bus'} mins={estimate.transitMin} tone="transit" />
               <ModeCell icon={<Car size={13} />} label="Taxi" mins={estimate.taxiMin} tone="taxi" />
             </div>
-            {from?.coords && coords && (
+            {estimate.mrt && from?.coords && coords && (
+              <div className="mt-2.5 space-y-1.5">
+                <MrtRouteLine route={estimate.mrt} />
+                <TransitLinks from={from.coords} to={coords} toName={place?.name ?? editing?.name} />
+              </div>
+            )}
+            {!estimate.mrt && from?.coords && coords && (
               <a
                 href={directionsUrl(from.coords, coords, estimate.suggested)}
                 target="_blank"
