@@ -39,10 +39,25 @@ jobs:
       # Requires Settings -> Pages -> Source = "Deploy from a branch",
       # branch gh-pages, folder / (root).
       - name: Publish to gh-pages root
+        id: publish
+        # Pushing main and v2 together starts both workflows at once, and the
+        # second push to gh-pages is rejected. Retry once instead of failing.
+        continue-on-error: true
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           # The preview build lives in /preview on this same branch — publishing
           # the live site must not sweep it away.
+          keep_files: true
+
+      - if: steps.publish.outcome == 'failure'
+        run: sleep 30
+
+      - name: Publish to gh-pages root (retry)
+        if: steps.publish.outcome == 'failure'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
           keep_files: true

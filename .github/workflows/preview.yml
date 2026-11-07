@@ -37,11 +37,28 @@ jobs:
       - run: npm run selftest
 
       - name: Publish to gh-pages/preview
+        id: publish
+        # Runs alongside the live deploy when main and v2 are pushed together;
+        # whichever reaches gh-pages second is rejected. Retry once.
+        continue-on-error: true
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           destination_dir: preview
           # Never wipe the live site sitting at the root of the same branch.
+          keep_files: true
+          commit_message: "preview: ${{ github.event.head_commit.message }}"
+
+      - if: steps.publish.outcome == 'failure'
+        run: sleep 30
+
+      - name: Publish to gh-pages/preview (retry)
+        if: steps.publish.outcome == 'failure'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          destination_dir: preview
           keep_files: true
           commit_message: "preview: ${{ github.event.head_commit.message }}"
